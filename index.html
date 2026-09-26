@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DoctoralSync</title>
+  <!-- Open Graph (pratinjau gambar saat tautan dibagikan di WhatsApp, dll.) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="DoctoralSync — Sistem Bimbingan Disertasi" />
+  <meta property="og:description" content="Kelola bimbingan disertasi: pengajuan, revisi, jadwal ujian, dan dokumen secara terintegrasi." />
+  <meta property="og:image" content="notif-banner.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800;900&family=Cinzel:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ============ HALAMAN LOGIN (gaya SIMALIA) ============ -->
+  <section id="loginView" class="login-overlay">
+    <div class="login-card2">
+      <div class="login-left">
+        <form id="loginForm">
+          <p class="login-welcome">Selamat datang di</p>
+          <div class="login-logo"><span class="login-badge"><svg class="toga-ico" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5 12 4l10 4.5-10 4.5L2 8.5Z"/><path d="M6 10.6V15c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6v-4.4"/><path d="M22 8.5v5.2"/></svg></span>DoctoralSync</div>
+          <p class="login-sub">Masuk untuk mengelola Sistem Bimbingan Disertasi.</p>
+          <label class="login-field"><span class="lf-ico">👤</span><input id="loginUser" autocomplete="username" placeholder="Username" required /></label>
+          <label class="login-field"><span class="lf-ico">🔒</span><input type="password" id="loginPass" autocomplete="current-password" placeholder="Kata Sandi" required /></label>
+          <p id="loginError" class="login-msg" hidden></p>
+          <button class="login-btn" type="submit">MASUK</button>
+          <p class="login-foot">Admin default: admin / admin123</p>
+        </form>
+      </div>
+      <div class="login-right" aria-hidden="true">
+        <div class="login-right-inner">
+          <span class="login-badge3"><svg class="toga-ico" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5 12 4l10 4.5-10 4.5L2 8.5Z"/><path d="M6 10.6V15c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6v-4.4"/><path d="M22 8.5v5.2"/></svg></span>
+          <div class="login-brand2">DoctoralSync</div>
+          <p>Sistem Bimbingan Disertasi — kelola pengajuan bimbingan, revisi, jadwal ujian, dan dokumen secara terintegrasi antara mahasiswa, promotor, dan co-promotor.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ APLIKASI ============ -->
+  <div id="appView" hidden>
+    <header class="topbar">
+      <button id="menuToggle" class="icon-btn" aria-label="Menu">☰</button>
+      <div class="brand"><span class="brand-badge"><svg class="toga-ico" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5 12 4l10 4.5-10 4.5L2 8.5Z"/><path d="M6 10.6V15c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6v-4.4"/><path d="M22 8.5v5.2"/></svg></span> <span>DoctoralSync</span></div>
+      <div class="spacer"></div>
+      <div class="user-chip">
+        <span id="userAvatar" class="avatar-slot"></span>
+        <span id="userName">-</span>
+        <span id="userRole" class="badge"></span>
+      </div>
+      <button id="btnLogout" class="btn btn-ghost">Keluar</button>
+    </header>
+
+    <div class="layout">
+      <nav id="sidebar" class="sidebar">
+        <a class="nav-item" data-view="dashboard">📊 Dashboard</a>
+        <a class="nav-item" data-view="bimbingan" data-role="mahasiswa,dosen">💬 Bimbingan</a>
+        <a class="nav-item" data-view="timeline" data-role="mahasiswa,dosen">🗓️ Timeline</a>
+        <a class="nav-item" data-view="dokumen" data-role="mahasiswa,dosen">📎 Dokumen</a>
+        <a class="nav-item" data-view="arsip" data-role="dosen">🗄️ Arsip</a>
+        <a class="nav-item" data-view="monitoring" data-role="kaprodi,admin">📈 Monitoring</a>
+        <a class="nav-item" data-view="users" data-role="admin">👥 Kelola Pengguna</a>
+        <a class="nav-item" data-view="akun">⚙️ Akun Saya</a>
+      </nav>
+      <div id="sidebarBackdrop" class="backdrop" hidden></div>
+
+      <main id="mainContent" class="content">
+        <!-- diisi oleh app.js -->
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ MODAL ============ -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="modalTitle">Judul</h3>
+        <button class="icon-btn" data-close aria-label="Tutup">✕</button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ============ TOAST ============ -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="pdf.min.js"></script>
+  <script src="xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

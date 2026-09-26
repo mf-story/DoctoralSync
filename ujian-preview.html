@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Simulasi Jadwal Ujian — DoctoralSync</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  body { padding: 24px; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .wrap h2 { font-family: var(--font-display); color: var(--navy); }
+  .stepnote { color: var(--muted); font-size: 13px; margin: -6px 0 16px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>🎓 Jadwal Ujian (4 jenis, berjenjang)</h2>
+    <p class="stepnote">Tampil di halaman <b>Bimbingan Saya</b> (mahasiswa), di bawah kartu Promotor &amp; Co-Promotor. Tiap jenis butuh <b>ACC semua pembimbing</b> dan urutan sebelumnya terjadwal.</p>
+
+    <!-- 1. Proposal: sudah ujian -->
+    <div class="card" style="margin-top:14px">
+      <div class="li-head">
+        <span class="bimb-no ujian">🎓 Ujian Seminar Proposal</span>
+        <span class="tag selesai">sudah ujian</span>
+        <span class="spacer" style="flex:1"></span>
+        <span class="muted small">20 Sep 2026</span>
+      </div>
+      <div class="muted small" style="margin-top:6px">Tanggal: 20 Sep 2026 · 📎 1 berkas</div>
+      <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+      <div class="note-acc">🎓 Seminar proposal telah dilaksanakan. Ajukan bimbingan tahap Disertasi:</div>
+      <div class="row" style="gap:8px;margin-top:8px">
+        <button class="btn btn-primary btn-sm">➡️ ke Promotor</button>
+        <button class="btn btn-primary btn-sm">➡️ ke Co-Promotor</button>
+      </div>
+    </div>
+
+    <!-- 2. Hasil: terjadwal -->
+    <div class="card" style="margin-top:14px">
+      <div class="li-head">
+        <span class="bimb-no ujian">🎓 Ujian Seminar Hasil</span>
+        <span class="tag acc">terjadwal</span>
+        <span class="spacer" style="flex:1"></span>
+        <span class="muted small">15 Okt 2026</span>
+      </div>
+      <div class="field" style="margin-top:8px"><label>Tanggal Ujian Seminar Hasil</label>
+        <div style="font-weight:800;font-size:18px;color:var(--primary-d)">15 Okt 2026</div></div>
+      <div class="muted small" style="margin:6px 0">Berkas:</div>
+      <div class="field"><label>📄 Draft Hasil Penelitian.pdf</label>
+        <button class="btn btn-ghost btn-sm">👁️ Lihat File</button></div>
+    </div>
+
+    <!-- 3. Tutup: aktif (belum diisi, siap dijadwalkan) -->
+    <div class="card" style="margin-top:14px">
+      <div class="li-head">
+        <span class="bimb-no ujian">🎓 Ujian Seminar Tutup</span>
+        <span class="tag revisi">belum diisi</span>
+        <span class="spacer" style="flex:1"></span>
+        <span class="muted small"></span>
+      </div>
+      <div class="note-acc" style="margin-top:8px">Lengkapi jadwal ujian seminar tutup &amp; unggah berkas.</div>
+      <div class="field"><label>Tanggal Ujian Seminar Tutup</label><input type="date" value="2026-11-10"></div>
+      <div class="field"><label>Berkas PDF</label><input type="file" accept=".pdf"></div>
+      <button class="btn btn-ghost">⬆️ Upload Berkas</button>
+      <button class="btn btn-primary btn-block mt">Simpan Jadwal</button>
+    </div>
+
+    <!-- 4. Promosi: terkunci -->
+    <div class="card" style="margin-top:14px">
+      <div class="li-head">
+        <span class="bimb-no ujian">🎓 Ujian Promosi Doktor</span>
+        <span class="tag revisi">terkunci</span>
+        <span class="spacer" style="flex:1"></span>
+        <span class="muted small"></span>
+      </div>
+      <div class="small" style="margin-top:6px;color:var(--red)">🔒 Jadwalkan Ujian Seminar Tutup terlebih dahulu</div>
+    </div>
+  </div>
+</body>
+</html>

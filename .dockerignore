@@ -1,0 +1,15 @@
+# Jangan ikutkan data/berkas lokal & sensitif ke dalam image
+.git/
+node_modules/
+wa-server/
+data/
+uploads/
+certs/
+*.pfx
+pfx-pass.txt
+*.log
+*.bat
+*.ps1
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,15 @@
+{
+  "name": "e-disertasi-wa-server",
+  "version": "1.0.0",
+  "description": "Gateway WhatsApp untuk E-Disertasi (notifikasi bimbingan ke nomor tiap pengguna).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "qrcode": "^1.5.3",
+    "whatsapp-web.js": "^1.26.0"
+  }
+}

@@ -1,0 +1,15 @@
+# Data & berkas runtime (jangan di-commit)
+data/
+uploads/
+certs/
+*.pfx
+pfx-pass.txt
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
