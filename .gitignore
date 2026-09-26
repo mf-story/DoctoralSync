@@ -5,6 +5,12 @@ certs/
 *.pfx
 pfx-pass.txt
 
+# Sesi WhatsApp gateway
+.wwebjs_auth/
+.wwebjs_cache/
+wa-server/.wwebjs_auth/
+wa-server/.wwebjs_cache/
+
 # Node
 node_modules/
 npm-debug.log*

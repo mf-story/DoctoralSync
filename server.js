@@ -988,6 +988,7 @@ async function handleApi(req, res, url, ip) {
         mahasiswaId: s.mahasiswaId,
         nama: u.nama || '-',
         username: u.username || '-',
+        tahunMasuk: u.tahunMasuk || '-',
         prodi: u.prodi || '-',
         judul: s.judul || '(belum ada judul)',
         pembimbing1: (DB.users.find(x => x.id === s.pembimbing1) || {}).nama || '-',

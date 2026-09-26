@@ -455,8 +455,8 @@ VIEWS.dashboard = async (c) => {
       statCard(ringkasan.rataProgres + '%', 'Rata-rata Progres'),
       statCard(ringkasan.totalBimbingan, 'Total Bimbingan')
     ));
-    const box = el('div', { class: 'card mt' }, el('h3', {}, '📈 Mahasiswa (progres terendah dulu)'));
-    box.append(mahasiswaTable(mahasiswa.slice(0, 8)));
+    const box = el('div', { class: 'card mt' }, el('h3', {}, '📈 Mahasiswa'));
+    box.append(mahasiswaPanel(mahasiswa));
     c.append(box);
   }
 };
@@ -1645,24 +1645,58 @@ VIEWS.monitoring = async (c) => {
     statCard(ringkasan.rataProgres + '%', 'Rata-rata Progres'),
     statCard(ringkasan.totalBimbingan, 'Total Bimbingan')));
   const box = el('div', { class: 'card mt' }, el('h3', {}, 'Seluruh Mahasiswa'));
-  box.append(mahasiswaTable(mahasiswa));
+  box.append(mahasiswaPanel(mahasiswa));
   c.append(box);
 };
 
 function mahasiswaTable(rows) {
   const wrap = el('div', { class: 'table-wrap' });
   const t = el('table', {},
-    el('thead', {}, el('tr', {}, el('th', {}, 'Nama'), el('th', {}, 'Judul'), el('th', {}, 'Promotor'), el('th', {}, 'Progres Bimbingan'), el('th', {}, 'Bimbingan Terakhir'))));
+    el('thead', {}, el('tr', {},
+      el('th', {}, 'Nama'), el('th', {}, 'Tahun Masuk'), el('th', {}, 'Judul'),
+      el('th', {}, 'Promotor'), el('th', {}, 'Co-Promotor'),
+      el('th', {}, 'Progres Bimbingan'), el('th', {}, 'Bimbingan Terakhir'))));
   const tb = el('tbody', {});
-  if (!rows.length) tb.append(el('tr', {}, el('td', { colspan: 5, class: 'empty' }, 'Belum ada data.')));
+  if (!rows.length) tb.append(el('tr', {}, el('td', { colspan: 7, class: 'empty' }, 'Belum ada data.')));
   rows.forEach(r => tb.append(el('tr', {},
     el('td', {}, el('b', {}, esc(r.nama)), el('div', { class: 'muted small' }, esc(r.username))),
+    el('td', {}, esc(r.tahunMasuk || '-')),
     el('td', {}, esc(r.judul)),
     el('td', {}, esc(r.pembimbing1)),
+    el('td', {}, esc(r.pembimbing2)),
     el('td', { style: 'min-width:150px' }, progressBar(r.progres, true),
       el('div', { class: 'muted small' }, r.progres + '% · ' + r.jmlBimbingan + '/' + (r.target || 8) + ' bimbingan' + (r.bimbinganSelesai ? ' (' + r.bimbinganSelesai + ' selesai)' : ''))),
     el('td', {}, r.lastTanggal ? el('div', {}, el('div', {}, esc(r.lastTopik || '-')), el('div', { class: 'muted small' }, fmtDate(r.lastTanggal))) : el('span', { class: 'muted small' }, 'Belum ada')))));
   t.append(tb); wrap.append(t); return wrap;
+}
+
+// Panel mahasiswa dengan filter (cari + Tahun Masuk + Promotor)
+function mahasiswaPanel(rows) {
+  const search = el('input', { type: 'text', placeholder: '🔍 Cari nama / NIM / judul…', style: 'flex:1 1 180px;min-width:140px;width:auto' });
+  const tahunOpts = [...new Set(rows.map(r => r.tahunMasuk).filter(x => x && x !== '-'))].sort();
+  const promOpts = [...new Set(rows.map(r => r.pembimbing1).filter(x => x && x !== '-'))].sort();
+  const tahunSel = el('select', { style: 'flex:0 1 auto;width:auto' }, el('option', { value: '' }, 'Semua Tahun Masuk'),
+    tahunOpts.map(y => el('option', { value: y }, y)));
+  const promSel = el('select', { style: 'flex:0 1 auto;width:auto' }, el('option', { value: '' }, 'Semua Promotor'),
+    promOpts.map(p => el('option', { value: p }, p)));
+  const info = el('div', { class: 'muted small', style: 'margin-left:auto;white-space:nowrap' }, '');
+  const host = el('div', {});
+  const apply = () => {
+    const q = search.value.trim().toLowerCase();
+    const ty = tahunSel.value, pr = promSel.value;
+    const filtered = rows.filter(r =>
+      (!ty || r.tahunMasuk === ty) &&
+      (!pr || r.pembimbing1 === pr) &&
+      (!q || ((r.nama || '') + ' ' + (r.username || '') + ' ' + (r.judul || '')).toLowerCase().includes(q)));
+    host.innerHTML = '';
+    host.append(mahasiswaTable(filtered));
+    info.textContent = filtered.length + ' / ' + rows.length + ' mahasiswa';
+  };
+  search.addEventListener('input', apply);
+  tahunSel.addEventListener('change', apply);
+  promSel.addEventListener('change', apply);
+  apply();
+  return el('div', {}, el('div', { class: 'row', style: 'gap:8px;margin-bottom:12px' }, search, tahunSel, promSel, info), host);
 }
 
 // ---------------- KELOLA PENGGUNA (admin) ----------------

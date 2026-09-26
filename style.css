@@ -41,7 +41,8 @@
   --radius: 18px;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; overflow-x: hidden; -webkit-text-size-adjust: 100%; }
+img, canvas, iframe, svg, video { max-width: 100%; }
 body {
   font-family: var(--font-sans);
   background:
@@ -190,7 +191,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 #menuToggle { display: none; }
 
 /* ---------- Layout ---------- */
-.layout { display: flex; min-height: calc(100vh - 61px); }
+.layout { display: flex; min-height: calc(100vh - 61px); min-width: 0; }
 .sidebar { width: 236px; background: rgba(255, 255, 255, .66); backdrop-filter: blur(8px); border-right: 1px solid var(--line);
   padding: 18px 13px; display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
 .nav-item { padding: 12px 15px; border-radius: 13px; font-weight: 600; color: var(--navy-2);
@@ -200,7 +201,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 .nav-item.active { background: var(--grad); color: #fff; box-shadow: 0 14px 26px -14px rgba(10, 28, 70, .8); }
 .nav-item.active::before { content: ""; position: absolute; left: -13px; top: 50%; transform: translateY(-50%);
   width: 4px; height: 22px; border-radius: 4px; background: var(--gold); }
-.content { flex: 1; padding: 28px; max-width: 1160px; }
+.content { flex: 1; min-width: 0; padding: 28px; max-width: 1160px; }
 .backdrop { position: fixed; inset: 0; background: rgba(10, 28, 70, .45); z-index: 25; }
 
 /* ---------- Cards & grid ---------- */
@@ -370,4 +371,32 @@ tr:hover td { background: #fbfaf4; }
   .content { padding: 18px; }
   .two-col { grid-template-columns: 1fr; }
   .user-chip #userName { display: none; }
+  .card { padding: 18px; }
+  .row-between { flex-wrap: wrap; }
+  .modal { padding: 10px; }
+}
+
+@media (max-width: 560px) {
+  body { font-size: 14.5px; }
+  .topbar { padding: 10px 14px; gap: 8px; }
+  .brand { font-size: 17px; gap: 8px; }
+  .brand-badge { width: 32px; height: 32px; }
+  .content { padding: 13px; }
+  .card { padding: 15px; border-radius: 16px; }
+  .page-head { margin-bottom: 16px; gap: 8px; }
+  .page-head h2 { font-size: 21px; }
+  .judul-title { font-size: 18px; }
+  .judul-card .jc-body { flex-direction: column; }
+  .stat .num { font-size: 27px; }
+  .bimb-group { padding-left: 16px; }
+  .list-item { padding: 13px; }
+  .btn { padding: 10px 14px; }
+  /* Modal hampir memenuhi layar untuk kemudahan di HP */
+  .modal { padding: 8px; }
+  .modal-card { border-radius: 16px; max-height: 94vh; }
+  .modal-head { padding: 14px 16px; border-radius: 16px 16px 0 0; }
+  .modal-head h3 { font-size: 17px; }
+  .modal-body { padding: 16px; }
+  .login-card2 { border-radius: 16px; }
+  .login-left { padding: 30px 22px; }
 }
