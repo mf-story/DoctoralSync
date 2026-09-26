@@ -25,8 +25,9 @@ const MAX_BODY = 20 * 1024 * 1024; // 20 MB (body JSON, base64 ~1.37x lebih besa
 const WA_API_URL = process.env.WA_API_URL || '';   // mis. http://127.0.0.1:3011/send
 const WA_API_KEY = process.env.WA_API_KEY || '';
 const APP_URL = process.env.APP_URL || ('http://localhost:' + PORT);
-// Banner gambar untuk notifikasi WA (kosongkan WA_BANNER untuk pesan teks saja).
-const WA_BANNER = process.env.WA_BANNER !== undefined ? process.env.WA_BANNER : (APP_URL + '/notif-banner.jpg');
+// Banner gambar untuk notifikasi WA. Default: teks saja (seperti LeaDi-PDS).
+// Isi env WA_BANNER dengan URL gambar HANYA bila ingin memakai kartu gambar.
+const WA_BANNER = process.env.WA_BANNER || '';
 function normalizeWa(n) {
   let s = String(n || '').replace(/[^0-9]/g, '');
   if (!s) return '';
