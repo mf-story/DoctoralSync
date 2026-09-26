@@ -7,8 +7,8 @@ WORKDIR /app
 COPY . .
 
 # Direktori data & unggahan — jadikan volume persisten di Coolify
-RUN mkdir -p /app/data /app/uploads && chown -R node:node /app
-USER node
+# Berjalan sebagai root agar volume yang dimount (dimiliki root) tetap bisa ditulis
+RUN mkdir -p /app/data /app/uploads
 
 ENV NODE_ENV=production \
     PORT=5520 \

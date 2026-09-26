@@ -8,6 +8,10 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+// Catat error tak tertangani agar terlihat di log (mis. Coolify) alih-alih diam keluar
+process.on('uncaughtException', e => console.error('[uncaughtException]', e));
+process.on('unhandledRejection', e => console.error('[unhandledRejection]', e));
+
 const PORT = parseInt(process.env.PORT, 10) || 5520;
 const HOST = process.env.HOST || '0.0.0.0';
 const ROOT = __dirname;
@@ -164,7 +168,7 @@ function loadDB() {
       password: hashPassword('admin123'),
       createdAt: new Date().toISOString()
     });
-    saveDB();
+    try { saveDB(); } catch (e) { console.error('Gagal menulis db.json awal (cek izin tulis volume /app/data):', e.message); }
     console.log('DB baru dibuat. Login admin default: admin / admin123');
   }
   // migrasi ringan
@@ -184,7 +188,7 @@ function loadDB() {
       } else { u.foto = ''; avatarMigrated = true; }
     }
   });
-  if (avatarMigrated) saveDB();
+  if (avatarMigrated) { try { saveDB(); } catch (e) { console.error('Gagal menyimpan migrasi foto:', e.message); } }
 }
 
 let saveTimer = null;
