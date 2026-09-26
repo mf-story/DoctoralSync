@@ -461,6 +461,9 @@ async function handleApi(req, res, url, ip) {
       return sendJSON(res, 200, { created, errors });
     }
     if (method === 'POST' && !seg[1]) {
+      if (me.role !== 'admin') return sendJSON(res, 403, { error: 'Hanya admin' });
+      const body = await readBody(req);
+      const username = String(body.username || '').trim().toLowerCase();
       if (!username) return sendJSON(res, 400, { error: 'Username wajib diisi' });
       if (DB.users.some(u => u.username.toLowerCase() === username)) {
         return sendJSON(res, 400, { error: 'Username sudah dipakai' });
