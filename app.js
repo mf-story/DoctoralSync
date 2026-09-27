@@ -52,8 +52,9 @@ const UJIAN_TYPES = [
 ];
 const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
 const roleLabel = r => ({ mahasiswa: 'Mahasiswa', dosen: 'Dosen', admin: 'Admin Prodi', kaprodi: 'Ketua Prodi' }[r] || r);
-const statusLabel = s => ({ diajukan: 'diajukan', disetujui: 'disetujui', dijadwalkan: 'dijadwalkan', revisi: 'perlu revisi', direvisi: 'sudah direvisi', acc: 'ACC', selesai: 'selesai', batal: 'batal' }[s] || s);
+const statusLabel = s => ({ diajukan: 'diajukan', disetujui: 'disetujui', dijadwalkan: 'dijadwalkan', revisi: (ME && ME.role === 'mahasiswa') ? 'perlu revisi' : 'belum direvisi', direvisi: 'sudah direvisi', acc: 'ACC', selesai: 'selesai', batal: 'batal' }[s] || s);
 const userName = id => (USERS_CACHE.find(u => u.id === id) || {}).nama || '-';
+const userObj = id => USERS_CACHE.find(u => u.id === id) || null;
 // Nomor identitas (NIM mahasiswa / NUPTK dosen) tersimpan pada field username
 const userNomor = id => (USERS_CACHE.find(u => u.id === id) || {}).username || '';
 const nomorSuffix = (id, label) => { const n = userNomor(id); return n ? ' · ' + label + ' ' + esc(n) : ''; };
@@ -624,7 +625,6 @@ VIEWS.bimbingan = async (c) => {
         el('button', { class: 'btn btn-ghost btn-sm', style: 'flex-shrink:0', onclick: editJudul }, '✏️ Edit Judul')));
     const jblk = judulUsulanBlock(skripsi, ME.id); if (jblk) judulCard.append(jblk);
     c.append(judulCard);
-    c.append(el('div', { class: 'muted small', style: 'margin:-4px 0 14px' }, 'Ajukan bimbingan ke promotor & co-promotor; tahapan berikutnya dibuat oleh dosen. Unggah dokumen PDF pada tiap tahapan.'));
     // Dua jalur terpisah: satu section untuk tiap pembimbing
     const allOrdered = bimbingan.slice().sort((a, b) =>
       (a.createdAt || '').localeCompare(b.createdAt || '') || (a.tanggal || '').localeCompare(b.tanggal || ''));
@@ -645,9 +645,11 @@ VIEWS.bimbingan = async (c) => {
       const hasPengajuan = list.length > 0;
       const card = el('div', { class: 'card' });
       card.append(el('div', { class: 'row-between', style: 'margin-bottom:6px;gap:8px;align-items:flex-start' },
-        el('div', { style: 'min-width:0' },
-          el('h3', { style: 'margin:0' }, '👤 ' + p.label + ': ' + esc(userName(p.id))),
-          userNomor(p.id) ? el('div', { class: 'muted small', style: 'margin-top:2px' }, 'NUPTK ' + esc(userNomor(p.id))) : null),
+        el('div', { class: 'row', style: 'gap:10px;min-width:0;align-items:center' },
+          avatarEl(userObj(p.id) || { nama: userName(p.id) }, 38),
+          el('div', { style: 'min-width:0' },
+            el('h3', { style: 'margin:0' }, p.label + ': ' + esc(userName(p.id))),
+            userNomor(p.id) ? el('div', { class: 'muted small', style: 'margin-top:2px' }, 'NUPTK ' + esc(userNomor(p.id))) : null)),
         el('div', { class: 'row', style: 'gap:6px;flex:0 0 auto' },
           list.length ? el('button', { class: 'btn btn-ghost btn-sm', onclick: () => cetakKartuKontrol(p, list, skripsi) }, '🖨️ Kartu Kontrol') : null,
           hasPengajuan ? null : el('button', { class: 'btn btn-primary btn-sm', onclick: () => ajukanBimbinganForm(reloadB, p.id) }, '+ Ajukan Bimbingan'))));
@@ -1436,7 +1438,7 @@ async function bimbinganForm(existing, fixedMahasiswaId, onDone, judulForm) {
   if (!skripsi.length) { toast('Belum ada mahasiswa bimbingan', 'err'); return; }
   body.append(el('div', { class: 'field' }, el('label', {}, 'Mahasiswa'), partnerSelect));
   const tgl = el('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
-  const PRESET_TOPIK = ['Judul', 'Abstrak', 'Revisi Bab 1', 'Revisi Bab 2', 'Revisi Bab 3', 'Revisi Bab 4', 'Revisi Bab 5', 'Kajian Teori', 'Metodologi Penelitian', 'Analisis Data', 'Tata Tulis & Sitasi', 'Daftar Pustaka'];
+  const PRESET_TOPIK = ['Judul', 'Abstrak', 'Bab 1', 'Bab 2', 'Bab 3', 'Bab 4', 'Bab 5', 'Kajian Teori', 'Metodologi Penelitian', 'Instrumen', 'Analisis Data', 'Tata Tulis & Sitasi', 'Daftar Pustaka'];
   const topikSelected = new Set();
   const topikChips = el('div', { class: 'chip-wrap' });
   const topikInput = el('input', { type: 'text', placeholder: 'Ketik topik lain lalu tekan Enter / Tambah' });

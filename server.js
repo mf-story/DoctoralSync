@@ -846,6 +846,10 @@ async function handleApi(req, res, url, ip) {
       // Hanya PDF asli (cek MIME + magic bytes) untuk mencegah unggahan berbahaya
       const isPdf = m[1] === 'application/pdf' && buf.slice(0, 5).toString('latin1') === '%PDF-';
       if (!isPdf) return sendJSON(res, 400, { error: 'Hanya berkas PDF yang diperbolehkan' });
+      // Cegah duplikat: tolak jika isi file identik sudah pernah diunggah untuk mahasiswa ini
+      const hash = crypto.createHash('sha256').update(buf).digest('hex');
+      const dup = DB.documents.find(d => d.mahasiswaId === mahasiswaId && d.hash === hash);
+      if (dup) return sendJSON(res, 409, { error: 'File identik sudah pernah diunggah (' + dup.nama + ')' });
       const safeName = String(body.nama || 'dokumen').replace(/[^\w.\- ]+/g, '_');
       const fname = uid('doc') + '.pdf';
       fs.writeFileSync(path.join(UPLOAD_DIR, fname), buf);
@@ -856,6 +860,7 @@ async function handleApi(req, res, url, ip) {
         nama: safeName,
         file: '/uploads/' + fname,
         ukuran: buf.length,
+        hash,
         uploadedBy: me.id,
         uploaderNama: me.nama,
         createdAt: new Date().toISOString()
