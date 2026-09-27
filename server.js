@@ -940,6 +940,40 @@ async function handleApi(req, res, url, ip) {
     }
   }
 
+  // ================= UJIAN (dosen: mahasiswa yang akan diuji) =================
+  if (seg[0] === 'ujian' && method === 'GET') {
+    if (me.role !== 'dosen' && me.role !== 'admin' && me.role !== 'kaprodi') return sendJSON(res, 403, { error: 'Akses ditolak' });
+    const JENIS = { proposal: 'Ujian Seminar Proposal', hasil: 'Ujian Seminar Hasil', tutup: 'Ujian Seminar Tutup', promosi: 'Ujian Promosi Doktor' };
+    const meName = String(me.nama || '').trim().toLowerCase();
+    const out = [];
+    DB.skripsi.forEach(s => {
+      if (!s.ujian) return;
+      const mhs = DB.users.find(u => u.id === s.mahasiswaId);
+      Object.keys(s.ujian).forEach(jns => {
+        const u = s.ujian[jns];
+        if (!u || !u.tanggal) return;
+        const penguji = Array.isArray(u.penguji) ? u.penguji : [];
+        const asProm = s.pembimbing1 === me.id;
+        const asCoprom = s.pembimbing2 === me.id;
+        const asPenguji = penguji.some(n => String(n).trim().toLowerCase() === meName);
+        if (!(me.role === 'admin' || me.role === 'kaprodi' || asProm || asCoprom || asPenguji)) return;
+        out.push({
+          mahasiswaId: s.mahasiswaId,
+          mahasiswaNama: mhs ? mhs.nama : '-',
+          mahasiswaNim: mhs ? mhs.username : '-',
+          prodi: mhs ? mhs.prodi : '',
+          judul: s.judul || '',
+          jenis: jns, jenisLabel: JENIS[jns] || jns,
+          tanggal: u.tanggal, metode: u.metode || '', link: u.link || '', tempat: u.tempat || '',
+          penguji,
+          peran: asProm ? 'Promotor' : (asCoprom ? 'Co-Promotor' : (asPenguji ? 'Penguji' : '-'))
+        });
+      });
+    });
+    out.sort((a, b) => (a.tanggal || '').localeCompare(b.tanggal || ''));
+    return sendJSON(res, 200, { ujian: out });
+  }
+
   // ================= PEMELIHARAAN PENYIMPANAN (admin) =================
   if (seg[0] === 'maintenance') {
     if (me.role !== 'admin') return sendJSON(res, 403, { error: 'Hanya admin' });

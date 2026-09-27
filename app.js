@@ -439,11 +439,15 @@ VIEWS.dashboard = async (c) => {
     const box = el('div', { class: 'card mt' }, el('h3', {}, '📖 Mahasiswa Bimbingan Anda'));
     if (!skripsi.length) box.append(el('div', { class: 'empty' }, 'Belum ada mahasiswa bimbingan.'));
     skripsi.forEach(s => {
-      const jml = revisiOf(bimbingan.filter(b => b.mahasiswaId === s.mahasiswaId)).length;
-      box.append(el('div', { class: 'list-item', style: 'cursor:pointer', onclick: () => openSkripsiDetail(s.mahasiswaId) },
+      const mine = bimbingan.filter(b => b.mahasiswaId === s.mahasiswaId);
+      const jml = revisiOf(mine).length;
+      const needAtt = mine.filter(b => b.status === 'direvisi' || b.status === 'diajukan').length;
+      box.append(el('div', { class: 'list-item' + (needAtt ? ' attn' : ''), style: 'cursor:pointer', onclick: () => openSkripsiDetail(s.mahasiswaId) },
         el('div', { class: 'row-between' },
           el('b', {}, esc(s.mahasiswa?.nama || '-')),
-          el('span', { class: 'muted small' }, jml + ' bimbingan')),
+          el('span', { class: 'row', style: 'gap:8px' },
+            needAtt ? el('span', { class: 'attn-badge', title: 'Ada balasan/revisi atau pengajuan baru dari mahasiswa' }, '💬 ' + needAtt + ' perlu ditindak') : null,
+            el('span', { class: 'muted small' }, jml + ' bimbingan'))),
         el('div', { class: 'muted small', style: 'margin:4px 0 0' }, esc(s.judul || '(belum ada judul)'))));
     });
     c.append(box);
@@ -676,6 +680,9 @@ VIEWS.bimbingan = async (c) => {
       // Kartu bimbingan dosen bisa dibuka/tutup, default tertutup
       const revisi = revisiOf(list);
       const belumCount = revisi.filter(b => b.status !== 'acc' && b.status !== 'selesai' && b.status !== 'batal').length;
+      // Balasan/revisi (direvisi) atau pengajuan baru (diajukan) dari mahasiswa → perlu ditindak dosen
+      const needAtt = list.filter(b => b.status === 'direvisi' || b.status === 'diajukan').length;
+      if (needAtt) card.classList.add('attn');
       const chevron = el('span', { class: 'muted', style: 'font-size:13px' }, '▸');
       groupEl.hidden = true;
       const header = el('div', { class: 'row-between', style: 'cursor:pointer;user-select:none', onclick: () => {
@@ -688,6 +695,7 @@ VIEWS.bimbingan = async (c) => {
             el('h3', { style: 'margin:0' }, esc(list[0].mahasiswaNama || userName(mid))),
             userNomor(mid) ? el('div', { class: 'muted small', style: 'margin-top:2px' }, 'NIM ' + esc(userNomor(mid))) : null)),
         el('span', { class: 'row', style: 'gap:10px' },
+          needAtt ? el('span', { class: 'attn-badge', title: 'Ada balasan/revisi atau pengajuan baru dari mahasiswa' }, '💬 ' + needAtt + ' perlu ditindak') : null,
           el('span', { class: 'muted small' }, revisi.length + ' bimbingan' + (belumCount ? ' · ' + belumCount + ' belum selesai' : '')),
           ME.role === 'dosen' ? el('button', { class: 'btn btn-ghost btn-sm', onclick: (e) => { e.stopPropagation(); arsipkanLulus(mid, list[0].mahasiswaNama || userName(mid)); } }, '🎓 Arsipkan') : null,
           chevron));
@@ -711,6 +719,39 @@ async function batalArsip(mid, nama) {
   try { await api('/skripsi/' + mid, { method: 'PUT', body: { lulus: false } }); toast('Arsip dibatalkan', 'ok'); navigate('arsip'); }
   catch (ex) { toast(ex.message, 'err'); }
 }
+
+// ---------------- UJIAN (dosen) ----------------
+VIEWS.ujian = async (c) => {
+  c.innerHTML = '';
+  c.append(pageHead('🎓 Jadwal Ujian'));
+  const { ujian } = await api('/ujian');
+  if (!ujian.length) { c.append(el('div', { class: 'empty' }, 'Belum ada mahasiswa yang akan Anda uji. Jadwal muncul di sini setelah mahasiswa mengisi jadwal ujian.')); return; }
+  const today = new Date().toISOString().slice(0, 10);
+  const akan = ujian.filter(u => u.tanggal >= today);
+  const lalu = ujian.filter(u => u.tanggal < today).reverse();
+  const peranBadge = p => p === 'Promotor' ? 'dosen' : (p === 'Co-Promotor' ? 'mahasiswa' : 'kaprodi');
+  const card = u => {
+    const daring = u.metode === 'daring';
+    const safe = /^https?:\/\//i.test(u.link || '');
+    const lok = daring
+      ? ((u.link && safe) ? el('a', { href: u.link, target: '_blank', rel: 'noopener', style: 'color:var(--primary-d);word-break:break-all' }, u.link) : el('span', {}, u.link || '—'))
+      : el('span', {}, u.tempat || '—');
+    return el('div', { class: 'card', style: 'margin-bottom:12px' },
+      el('div', { class: 'li-head', style: 'flex-wrap:wrap;gap:8px' },
+        el('span', { class: 'bimb-no ujian' }, '🎓 ' + esc(u.jenisLabel)),
+        el('span', { class: 'badge ' + peranBadge(u.peran) }, u.peran),
+        el('span', { class: 'spacer', style: 'flex:1' }),
+        el('span', { class: 'muted small' }, '📅 ' + fmtDate(u.tanggal))),
+      el('div', { style: 'font-weight:700;margin-top:8px' }, esc(u.mahasiswaNama) + (u.mahasiswaNim ? ' · NIM ' + esc(u.mahasiswaNim) : '')),
+      u.judul ? el('div', { class: 'muted small', style: 'margin-top:2px' }, esc(u.judul)) : null,
+      el('div', { style: 'margin-top:8px' }, el('span', { class: 'muted small' }, daring ? '🔗 Daring: ' : '📍 Luring: '), lok),
+      el('div', { style: 'margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center' },
+        el('span', { class: 'muted small' }, '🧑‍⚖️ Penguji:'),
+        (u.penguji && u.penguji.length) ? u.penguji.map(nm => el('span', { style: PENGUJI_CHIP }, '👤 ' + nm)) : el('span', { class: 'muted small' }, 'belum ditetapkan')));
+  };
+  if (akan.length) { c.append(el('h3', { style: 'margin:6px 0 10px' }, 'Akan Datang (' + akan.length + ')')); akan.forEach(u => c.append(card(u))); }
+  if (lalu.length) { c.append(el('h3', { style: 'margin:18px 0 10px' }, 'Telah Berlangsung (' + lalu.length + ')')); lalu.forEach(u => c.append(card(u))); }
+};
 
 // ---------------- ARSIP (dosen) ----------------
 VIEWS.arsip = async (c) => {
@@ -760,13 +801,13 @@ function cetakKartuKontrol(p, list, skripsi) {
   let fase = 'Proposal', no = 0, seen = 0;
   const rows = ordered.map(b => {
     let label;
-    if (isPeng(b)) { fase = b.fase || (seen === 0 ? 'Proposal' : fase); seen++; no = 0; label = 'Pengajuan ' + fase; }
+    if (isPeng(b)) { fase = b.fase || (seen === 0 ? 'Proposal' : fase); seen++; no = 0; label = 'Pengajuan Bimbingan' + (fase === 'Proposal' ? '' : ' ' + fase); }
     else { no++; label = 'Bimbingan ' + fase + ' ke-' + no; }
     return {
       tanggal: b.tanggal ? fmtDate(b.tanggal) : '-',
       tahap: label,
       materi: b.topik || (isPeng(b) ? 'Pengajuan bimbingan' : '-'),
-      arahan: b.catatanDosen || b.catatanMhs || '',
+      arahan: b.catatanDosen || '',
       status: statusLabel(b.status)
     };
   });
@@ -780,23 +821,24 @@ function cetakKartuKontrol(p, list, skripsi) {
   const html = `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Kartu Kontrol Bimbingan — ${esc(mhsNama)}</title>
 <style>
   * { box-sizing: border-box; }
+  @page { size: A4; margin: 14mm; }
   body { font-family: 'Segoe UI', Arial, sans-serif; color: #16233d; margin: 24px; font-size: 12px; }
   .head { text-align: center; border-bottom: 3px double #0045a6; padding-bottom: 10px; margin-bottom: 14px; }
   .head h1 { margin: 0; font-size: 18px; letter-spacing: .5px; color: #0045a6; }
   .head .sub { font-size: 13px; font-weight: 600; margin-top: 2px; }
-  .head .app { font-size: 11px; color: #667; margin-top: 2px; }
+  .head .uni { font-size: 14px; font-weight: 800; margin-top: 1px; color: #0045a6; }
   table.meta { width: 100%; margin: 10px 0 14px; border-collapse: collapse; }
   table.meta td { padding: 2px 4px; vertical-align: top; }
-  table.meta td.k { width: 130px; font-weight: 600; }
+  table.meta td.k { width: 1%; white-space: nowrap; font-weight: 600; padding-right: 8px; }
   table.meta td.s { width: 12px; }
   table.log { width: 100%; border-collapse: collapse; margin-top: 6px; }
   table.log th, table.log td { border: 1px solid #333; padding: 5px 6px; vertical-align: top; }
   table.log th { background: #eef3fb; font-size: 11px; }
   table.log td.c { text-align: center; }
   table.log td:nth-child(7) { width: 70px; }
-  .sign { margin-top: 26px; width: 100%; }
-  .sign td { width: 50%; vertical-align: top; font-size: 12px; }
-  .sign .sp { height: 62px; }
+  .sign-wrap { margin-top: 34px; display: flex; justify-content: flex-end; }
+  .sign-box { width: 46%; max-width: 320px; text-align: center; font-size: 12px; line-height: 1.5; }
+  .sign-box .sp { height: 66px; }
   @media print { body { margin: 12mm; } .noprint { display: none; } }
   .noprint { text-align: center; margin-bottom: 14px; }
   .btnp { background: #0045a6; color: #fff; border: 0; padding: 8px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; }
@@ -804,8 +846,8 @@ function cetakKartuKontrol(p, list, skripsi) {
 <div class="noprint"><button class="btnp" id="btnCetak">🖨️ Cetak / Simpan PDF</button></div>
 <div class="head">
   <h1>KARTU KONTROL BIMBINGAN DISERTASI</h1>
-  <div class="sub">${esc(p.label)}</div>
-  <div class="app">DoctoralSync — Sistem Bimbingan Program Doktor</div>
+  <div class="sub">Program Studi S-3 Pendidikan Program Pascasarjana</div>
+  <div class="uni">Universitas Muhammadiyah Makassar</div>
 </div>
 <table class="meta">
   <tr><td class="k">Nama Mahasiswa</td><td class="s">:</td><td>${esc(mhsNama)}</td><td class="k">${esc(p.label)}</td><td class="s">:</td><td>${esc(dosenNama)}</td></tr>
@@ -817,12 +859,13 @@ function cetakKartuKontrol(p, list, skripsi) {
   <thead><tr><th>No</th><th>Tanggal</th><th>Tahap</th><th>Materi / Topik</th><th>Catatan / Arahan Pembimbing</th><th>Status</th><th>Paraf</th></tr></thead>
   <tbody>${trs}</tbody>
 </table>
-<table class="sign">
-  <tr>
-    <td>Mengetahui,<br>${esc(p.label)}<div class="sp"></div><b>${esc(dosenNama)}</b><br>NUPTK. ${esc(dosenNuptk)}</td>
-    <td>Makassar, ${esc(hari)}<br>Mahasiswa<div class="sp"></div><b>${esc(mhsNama)}</b><br>NIM. ${esc(mhsNim)}</td>
-  </tr>
-</table>
+<div class="sign-wrap">
+  <div class="sign-box">
+    Makassar, ${esc(hari)}<br>Mengetahui, ${esc(p.label)}
+    <div class="sp"></div>
+    <b>${esc(dosenNama)}</b><br>NUPTK. ${esc(dosenNuptk)}
+  </div>
+</div>
 </body></html>`;
   const w = window.open('', '_blank');
   if (!w) return toast('Popup diblokir browser. Izinkan popup untuk mencetak.', 'err');
