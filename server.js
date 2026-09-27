@@ -849,7 +849,7 @@ async function handleApi(req, res, url, ip) {
       // Cegah duplikat: tolak jika isi file identik sudah pernah diunggah untuk mahasiswa ini
       const hash = crypto.createHash('sha256').update(buf).digest('hex');
       const dup = DB.documents.find(d => d.mahasiswaId === mahasiswaId && d.hash === hash);
-      if (dup) return sendJSON(res, 409, { error: 'File identik sudah pernah diunggah (' + dup.nama + ')' });
+      if (dup) return sendJSON(res, 409, { error: 'Unggahan ditolak: isi file ini sama persis dengan dokumen "' + dup.nama + '" yang sudah ada. Jika ini hasil revisi, pastikan Anda memilih file yang sudah diperbaiki (bukan file lama).' });
       const safeName = String(body.nama || 'dokumen').replace(/[^\w.\- ]+/g, '_');
       const fname = uid('doc') + '.pdf';
       fs.writeFileSync(path.join(UPLOAD_DIR, fname), buf);
