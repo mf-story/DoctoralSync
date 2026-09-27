@@ -391,28 +391,35 @@ tr:hover td { background: #fbfaf4; }
 }
 
 @media (max-width: 560px) {
-  body { font-size: 14.5px; }
-  .topbar { padding: 10px 14px; gap: 8px; }
-  .brand { font-size: 17px; gap: 8px; }
-  .brand-badge { width: 32px; height: 32px; }
-  .content { padding: 13px; }
+  body { font-size: 14px; }
+  .topbar { padding: 8px 12px; gap: 6px; }
+  .brand { font-size: 15px; gap: 8px; letter-spacing: 0; }
+  .brand-badge { width: 30px; height: 30px; }
+  .topbar .btn { padding: 8px 12px; font-size: 13px; }
+  .badge { font-size: 10px; padding: 3px 8px; }
+  .content { padding: 13px 13px 86px; }
   .card { padding: 15px; border-radius: 16px; }
   .page-head { margin-bottom: 16px; gap: 8px; }
-  .page-head h2 { font-size: 21px; }
+  .page-head h2 { font-size: 20px; }
   .judul-title { font-size: 18px; }
   .judul-card .jc-body { flex-direction: column; }
-  .stat .num { font-size: 27px; }
+  .stat .num { font-size: 26px; }
   .bimb-group { padding-left: 16px; }
   .list-item { padding: 13px; }
   .list-item .li-head { row-gap: 4px; }
   .row, .row-between { row-gap: 8px; }
   .btn { padding: 10px 14px; }
-  /* Modal hampir memenuhi layar untuk kemudahan di HP */
   .modal { padding: 8px; }
   .modal-card { border-radius: 16px; max-height: 94vh; }
   .modal-head { padding: 14px 16px; border-radius: 16px 16px 0 0; }
   .modal-head h3 { font-size: 17px; }
   .modal-body { padding: 16px; }
+  /* Login: kecilkan brand agar tak terpotong */
   .login-card2 { border-radius: 16px; }
-  .login-left { padding: 30px 22px; }
+  .login-left { padding: 28px 20px; }
+  .login-logo { font-size: 21px; letter-spacing: .5px; gap: 9px; }
+  .login-badge { width: 36px; height: 36px; font-size: 19px; }
+  .login-welcome { font-size: 11px; letter-spacing: 2px; }
+  .login-sub { font-size: 12.5px; }
+  .nav-item { font-size: 12px; padding: 8px 12px; }
 }
