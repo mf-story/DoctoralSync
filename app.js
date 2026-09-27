@@ -1436,7 +1436,19 @@ async function bimbinganForm(existing, fixedMahasiswaId, onDone, judulForm) {
   if (!skripsi.length) { toast('Belum ada mahasiswa bimbingan', 'err'); return; }
   body.append(el('div', { class: 'field' }, el('label', {}, 'Mahasiswa'), partnerSelect));
   const tgl = el('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
-  const topik = el('input', { type: 'text', placeholder: 'mis. Revisi Bab 1 (opsional)' });
+  const PRESET_TOPIK = ['Judul', 'Abstrak', 'Revisi Bab 1', 'Revisi Bab 2', 'Revisi Bab 3', 'Revisi Bab 4', 'Revisi Bab 5', 'Kajian Teori', 'Metodologi Penelitian', 'Analisis Data', 'Tata Tulis & Sitasi', 'Daftar Pustaka'];
+  const topikSelected = new Set();
+  const topikChips = el('div', { class: 'chip-wrap' });
+  const topikInput = el('input', { type: 'text', placeholder: 'Ketik topik lain lalu tekan Enter / Tambah' });
+  function renderTopikChips() {
+    topikChips.innerHTML = '';
+    PRESET_TOPIK.forEach(t => topikChips.append(el('button', { type: 'button', class: 'chip' + (topikSelected.has(t) ? ' chip-on' : ''), onclick: () => { topikSelected.has(t) ? topikSelected.delete(t) : topikSelected.add(t); renderTopikChips(); } }, t)));
+    [...topikSelected].filter(t => !PRESET_TOPIK.includes(t)).forEach(t => topikChips.append(el('button', { type: 'button', class: 'chip chip-on chip-custom', onclick: () => { topikSelected.delete(t); renderTopikChips(); } }, t + ' ✕')));
+  }
+  function addTopikCustom() { const v = topikInput.value.trim(); if (v) { topikSelected.add(v); topikInput.value = ''; renderTopikChips(); } }
+  topikInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addTopikCustom(); } });
+  const topikAddBtn = el('button', { type: 'button', class: 'btn btn-sm', onclick: addTopikCustom }, 'Tambah');
+  renderTopikChips();
   const metode = el('select', {}, el('option', { value: 'Tatap muka' }, 'Tatap muka'), el('option', { value: 'Daring' }, 'Daring'));
   const tempat = el('input', { type: 'text', placeholder: 'mis. Ruang Prodi / Lab Komputer' });
   const aplikasi = el('select', {}, el('option', {}, 'Aplikasi ini'), el('option', {}, 'Virtual Meet'));
@@ -1454,13 +1466,17 @@ async function bimbinganForm(existing, fixedMahasiswaId, onDone, judulForm) {
       el('div', { class: 'field' }, el('label', {}, 'Tanggal'), tgl),
       el('div', { class: 'field' }, el('label', {}, 'Metode'), metode)),
     fieldTempat, fieldAplikasi,
-    el('div', { class: 'field' }, el('label', {}, 'Topik / Materi (opsional)'), topik),
+    el('div', { class: 'field' },
+      el('label', {}, 'Topik / Materi ', el('span', { style: 'color:var(--red)' }, '*')),
+      topikChips,
+      el('div', { class: 'two-col', style: 'grid-template-columns:1fr auto;gap:8px;align-items:end' }, topikInput, topikAddBtn)),
     el('div', { class: 'field' }, el('label', {}, 'Catatan Revisi'), catatan),
     el('button', { class: 'btn btn-primary btn-block', onclick: async () => {
       const metodeStr = metode.value === 'Tatap muka'
         ? (tempat.value.trim() ? 'Tatap muka — ' + tempat.value.trim() : 'Tatap muka')
         : 'Daring — ' + aplikasi.value;
-      const payload = { tanggal: tgl.value, topik: topik.value.trim(), metode: metodeStr, catatan: catatan.value.trim(), mahasiswaId: partnerSelect.value, status: 'revisi' };
+      const payload = { tanggal: tgl.value, topik: [...topikSelected].join(', '), metode: metodeStr, catatan: catatan.value.trim(), mahasiswaId: partnerSelect.value, status: 'revisi' };
+      if (!topikSelected.size) return toast('Pilih atau ketik minimal 1 topik/materi', 'err');
       if (!payload.catatan) return toast('Catatan revisi wajib diisi', 'err');
       if (!payload.mahasiswaId) return toast('Pilih mahasiswa', 'err');
       if (metode.value === 'Tatap muka' && !tempat.value.trim()) return toast('Tempat wajib diisi', 'err');
