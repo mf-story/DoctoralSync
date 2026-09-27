@@ -1823,8 +1823,8 @@ function downloadUserTemplate() {
   if (!window.XLSX) return toast('Pustaka Excel belum termuat', 'err');
   const header = ['nama', 'username', 'role', 'prodi', 'tahun_masuk', 'wa', 'password', 'judul', 'promotor', 'copromotor'];
   const contoh = [
-    ['Dr. Andi Dosen, M.Pd.', '198501012010011001', 'dosen', 'S3 Pendidikan', '', '08123456789', '', '', '', ''],
-    ['Budi Mahasiswa', '2024001', 'mahasiswa', 'S3 Pendidikan', '2024', '08987654321', '', 'Judul disertasi contoh', '198501012010011001', '']
+    ['Dr. Andi Dosen, M.Pd.', '198501012010011001', 'dosen', 'S-3 Pendidikan', '', '08123456789', '', '', '', ''],
+    ['Budi Mahasiswa', '2024001', 'mahasiswa', 'S-3 Pendidikan', '2024', '08987654321', '', 'Judul disertasi contoh', '198501012010011001', '']
   ];
   const ws = XLSX.utils.aoa_to_sheet([header, ...contoh]);
   ws['!cols'] = [22, 20, 12, 18, 12, 15, 14, 40, 22, 22].map(w => ({ wch: w }));
@@ -1835,7 +1835,7 @@ function downloadUserTemplate() {
     ['nama', 'Nama lengkap (wajib)'],
     ['username', 'NIM (mahasiswa) / NUPTK (dosen) — wajib & unik'],
     ['role', 'mahasiswa / dosen / kaprodi / admin (wajib)'],
-    ['prodi', 'Program studi (opsional)'],
+    ['prodi', 'Program Studi — isi Kode atau Nama sesuai Master Prodi (mis. S-3 Pendidikan)'],
     ['tahun_masuk', 'Tahun masuk — khusus mahasiswa, mis. 2024 (opsional)'],
     ['wa', 'Nomor WhatsApp, mis. 08xxxx (opsional)'],
     ['password', 'Kata sandi awal (opsional; default: sama dengan username / NIM / NUPTK)'],

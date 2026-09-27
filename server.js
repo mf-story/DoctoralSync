@@ -441,9 +441,12 @@ async function handleApi(req, res, url, ip) {
         seen.add(username);
         const p1 = role === 'mahasiswa' ? findDosen(r.promotor) : '';
         const p2 = role === 'mahasiswa' ? findDosen(r.copromotor) : '';
+        // Cocokkan prodi ke Master Prodi (berdasarkan kode atau nama) → simpan Nama Prodi
+        const prodiRaw = String(r.prodi || '').trim();
+        const pm = (DB.prodi || []).find(p => p.kode.toLowerCase() === prodiRaw.toLowerCase() || p.nama.toLowerCase() === prodiRaw.toLowerCase());
         const user = {
           id: uid('usr'), username, nama: nama || username, role,
-          prodi: String(r.prodi || '').trim(), wa: String(r.wa || '').trim(),
+          prodi: pm ? pm.nama : prodiRaw, wa: String(r.wa || '').trim(),
           tahunMasuk: role === 'mahasiswa' ? String(r.tahunMasuk || r['tahun masuk'] || '').trim() : '',
           pembimbing1: p1, pembimbing2: p2,
           password: hashPassword(String(r.password || '').trim() || defaultPassword(role, username)),
