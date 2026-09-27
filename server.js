@@ -1130,7 +1130,8 @@ function guessExt(mime) {
 const CSP = [
   "default-src 'self'",
   "base-uri 'self'",
-  "frame-ancestors 'none'",
+  "frame-ancestors 'self'",
+  "frame-src 'self'",
   "object-src 'none'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -1143,7 +1144,7 @@ const CSP = [
 
 function setSecurityHeaders(res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
