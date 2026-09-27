@@ -156,6 +156,7 @@ function loadDB() {
       bimbingan: [], // { id, mahasiswaId, dosenId, tanggal, topik, metode, status, catatanMhs, catatanDosen, dokumen:[docId], createdAt }
       documents: [], // { id, mahasiswaId, bimbinganId, nama, file, ukuran, uploadedBy, createdAt }
       timeline: [],  // { id, mahasiswaId, judul, tanggal, selesai, createdBy }
+      prodi: [],     // { id, kode, nama, ketua, createdAt }
       meta: { tahapanTemplate: DEFAULT_TAHAPAN, createdAt: new Date().toISOString() }
     };
     // Buat admin default
@@ -174,6 +175,7 @@ function loadDB() {
   }
   // migrasi ringan
   if (!DB.meta.tahapanTemplate) DB.meta.tahapanTemplate = DEFAULT_TAHAPAN;
+  if (!DB.prodi) DB.prodi = [];
   // Pindahkan foto profil base64 lama menjadi file agar db.json tetap ringan
   let avatarMigrated = false;
   (DB.users || []).forEach(u => {
@@ -540,6 +542,47 @@ async function handleApi(req, res, url, ip) {
       DB.skripsi = DB.skripsi.filter(s => s.mahasiswaId !== targetId);
       DB.bimbingan = DB.bimbingan.filter(b => b.mahasiswaId !== targetId);
       DB.timeline = DB.timeline.filter(t => t.mahasiswaId !== targetId);
+      saveDBDebounced();
+      return sendJSON(res, 200, { ok: true });
+    }
+  }
+
+  // ================= MASTER PROGRAM STUDI =================
+  if (seg[0] === 'prodi') {
+    const pid = seg[1];
+    if (method === 'GET' && !pid) {
+      const list = (DB.prodi || []).slice().sort((a, b) => String(a.nama || '').localeCompare(String(b.nama || '')));
+      return sendJSON(res, 200, { prodi: list });
+    }
+    if (me.role !== 'admin') return sendJSON(res, 403, { error: 'Hanya admin' });
+    if (method === 'POST' && !pid) {
+      const body = await readBody(req);
+      const kode = String(body.kode || '').trim();
+      const nama = String(body.nama || '').trim();
+      if (!kode || !nama) return sendJSON(res, 400, { error: 'Kode dan Nama Prodi wajib diisi' });
+      if ((DB.prodi || []).some(p => p.kode.toLowerCase() === kode.toLowerCase())) return sendJSON(res, 400, { error: 'Kode prodi sudah dipakai' });
+      const p = { id: uid('prd'), kode, nama, ketua: String(body.ketua || '').trim(), createdAt: new Date().toISOString() };
+      DB.prodi = DB.prodi || []; DB.prodi.push(p);
+      saveDBDebounced();
+      return sendJSON(res, 200, { prodi: p });
+    }
+    if (method === 'PUT' && pid) {
+      const p = (DB.prodi || []).find(x => x.id === pid);
+      if (!p) return sendJSON(res, 404, { error: 'Prodi tidak ditemukan' });
+      const body = await readBody(req);
+      if (body.kode !== undefined) {
+        const kode = String(body.kode).trim();
+        if (!kode) return sendJSON(res, 400, { error: 'Kode wajib diisi' });
+        if (DB.prodi.some(x => x.id !== pid && x.kode.toLowerCase() === kode.toLowerCase())) return sendJSON(res, 400, { error: 'Kode prodi sudah dipakai' });
+        p.kode = kode;
+      }
+      if (body.nama !== undefined) p.nama = String(body.nama).trim();
+      if (body.ketua !== undefined) p.ketua = String(body.ketua).trim();
+      saveDBDebounced();
+      return sendJSON(res, 200, { prodi: p });
+    }
+    if (method === 'DELETE' && pid) {
+      DB.prodi = (DB.prodi || []).filter(x => x.id !== pid);
       saveDBDebounced();
       return sendJSON(res, 200, { ok: true });
     }

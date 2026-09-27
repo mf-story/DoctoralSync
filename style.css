@@ -249,6 +249,8 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line-soft); }
 th { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; font-weight: 800; }
 tr:hover td { background: #fbfaf4; }
+tr.rowlink { cursor: pointer; }
+tr.rowlink:hover td { background: var(--primary-l); }
 .table-wrap { overflow-x: auto; }
 
 /* ---------- Misc ---------- */

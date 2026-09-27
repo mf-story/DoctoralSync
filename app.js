@@ -7,6 +7,7 @@ const API = '/api';
 let TOKEN = localStorage.getItem('bs_token') || '';
 let ME = null;           // user login
 let USERS_CACHE = [];    // cache daftar user (untuk nama pembimbing/dosen)
+let PRODI_CACHE = [];    // cache master program studi (untuk pemilih di form)
 
 // ---------------- HTTP helper ----------------
 async function api(pathName, opts = {}) {
@@ -600,7 +601,7 @@ VIEWS.bimbingan = async (c) => {
   c.innerHTML = '';
   const [{ bimbingan }, docsRes, skripsiRes] = await Promise.all([
     api('/bimbingan'),
-    (ME.role === 'mahasiswa' || ME.role === 'dosen') ? api('/documents') : Promise.resolve({ documents: [] }),
+    (ME.role === 'mahasiswa' || ME.role === 'dosen' || ME.role === 'admin') ? api('/documents') : Promise.resolve({ documents: [] }),
     (ME.role !== 'mahasiswa') ? api('/skripsi').catch(() => ({ skripsi: [] })) : Promise.resolve({ skripsi: [] })
   ]);
   let addBtn = null;
@@ -995,6 +996,29 @@ function openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs) {
         body.append(el('button', { class: 'btn btn-danger btn-block mt', onclick: () => delBimbingan(b.id, reload) }, 'Batalkan Pengajuan'));
       }
     }
+  }
+
+  // ---- Aksi ADMIN: kelola progres bimbingan (ubah status/tanggal/catatan atau hapus) ----
+  if (ME.role === 'admin') {
+    const STATUSES = ['diajukan', 'disetujui', 'revisi', 'direvisi', 'acc', 'selesai', 'batal'];
+    const statusSel = el('select', {}, STATUSES.map(s => el('option', { value: s, ...(b.status === s ? { selected: 'selected' } : {}) }, statusLabel(s))));
+    const tglInp = el('input', { type: 'date', value: b.tanggal || '' });
+    const catInp = el('textarea', { rows: 2, placeholder: 'Catatan / arahan (opsional)' }, b.catatanDosen || '');
+    body.append(hr(),
+      el('div', { class: 'muted small', style: 'margin-bottom:8px' }, '🛠️ Kelola (Admin) — ubah status/tanggal/catatan, atau hapus entri ini.'),
+      el('div', { class: 'two-col' },
+        el('div', { class: 'field' }, el('label', {}, 'Status'), statusSel),
+        el('div', { class: 'field' }, el('label', {}, 'Tanggal'), tglInp)),
+      el('div', { class: 'field' }, el('label', {}, 'Catatan / Arahan'), catInp),
+      el('div', { class: 'row', style: 'gap:8px' },
+        el('button', { class: 'btn btn-primary', onclick: async () => {
+          try { await api('/bimbingan/' + b.id, { method: 'PUT', body: { status: statusSel.value, tanggal: tglInp.value, catatanDosen: catInp.value.trim() } });
+            toast('Perubahan disimpan', 'ok'); closeModal(); reload && reload(); } catch (ex) { toast(ex.message, 'err'); }
+        } }, '💾 Simpan Perubahan'),
+        el('button', { class: 'btn btn-danger', onclick: async () => {
+          if (!confirm('Hapus entri bimbingan ini secara permanen?')) return;
+          try { await api('/bimbingan/' + b.id, { method: 'DELETE' }); toast('Entri dihapus', 'ok'); closeModal(); reload && reload(); } catch (ex) { toast(ex.message, 'err'); }
+        } }, '🗑️ Hapus Entri')));
   }
 
   const judul = isPengajuan ? 'Detail Pengajuan Bimbingan' : 'Detail Bimbingan';
@@ -1701,7 +1725,7 @@ function mahasiswaTable(rows) {
       el('th', {}, 'Progres Bimbingan'), el('th', {}, 'Bimbingan Terakhir'))));
   const tb = el('tbody', {});
   if (!rows.length) tb.append(el('tr', {}, el('td', { colspan: 7, class: 'empty' }, 'Belum ada data.')));
-  rows.forEach(r => tb.append(el('tr', {},
+  rows.forEach(r => tb.append(el('tr', { class: 'rowlink', title: 'Klik untuk melihat detail bimbingan', onclick: () => openSkripsiDetail(r.mahasiswaId) },
     el('td', {}, el('b', {}, esc(r.nama)), el('div', { class: 'muted small' }, esc(r.username))),
     el('td', {}, esc(r.tahunMasuk || '-')),
     el('td', {}, esc(r.judul)),
@@ -1751,6 +1775,7 @@ VIEWS.users = async (c) => {
     el('button', { class: 'btn btn-primary', onclick: () => userForm() }, '+ Tambah Pengguna'))));
   const { users } = await api('/users');
   USERS_CACHE = users;
+  try { const pr = await api('/prodi'); PRODI_CACHE = pr.prodi || []; } catch (e) { PRODI_CACHE = []; }
   // Panel penyimpanan: pantau ukuran & bersihkan berkas yatim
   try {
     const st = await api('/maintenance/storage');
@@ -1890,7 +1915,10 @@ function userForm(existing) {
   const username = el('input', { type: 'text', value: existing?.username || '', ...(isEdit ? { disabled: 'disabled' } : {}) });
   const role = el('select', {}, ...['mahasiswa', 'dosen', 'kaprodi', 'admin'].map(r =>
     el('option', { value: r, ...(existing?.role === r ? { selected: 'selected' } : {}) }, roleLabel(r))));
-  const prodi = el('input', { type: 'text', value: existing?.prodi || '' });
+  const prodiOptions = [el('option', { value: '' }, '— Pilih Program Studi —')];
+  PRODI_CACHE.forEach(p => prodiOptions.push(el('option', { value: p.nama, ...(existing?.prodi === p.nama ? { selected: 'selected' } : {}) }, p.kode + ' — ' + p.nama)));
+  if (existing?.prodi && !PRODI_CACHE.some(p => p.nama === existing.prodi)) prodiOptions.push(el('option', { value: existing.prodi, selected: 'selected' }, existing.prodi));
+  const prodi = el('select', {}, prodiOptions);
   const wa = el('input', { type: 'text', placeholder: '08xxx', value: existing?.wa || '' });
   const pass = el('input', { type: 'text', placeholder: 'default: sama dengan username (NIM/NUPTK)' });
   const tahunMasuk = el('input', { type: 'number', min: '2000', max: '2100', placeholder: 'mis. 2024', value: existing?.tahunMasuk || '' });
@@ -1954,6 +1982,55 @@ async function resetPass(u) {
 async function delUser(id) {
   if (!confirm('Hapus pengguna ini beserta seluruh datanya?')) return;
   try { await api('/users/' + id, { method: 'DELETE' }); toast('Dihapus', 'ok'); navigate('users'); }
+  catch (ex) { toast(ex.message, 'err'); }
+}
+
+// ---------------- MASTER PROGRAM STUDI (admin) ----------------
+VIEWS.prodi = async (c) => {
+  c.innerHTML = '';
+  c.append(pageHead('Master Program Studi', el('button', { class: 'btn btn-primary', onclick: () => prodiForm() }, '+ Tambah Prodi')));
+  const { prodi } = await api('/prodi');
+  const box = el('div', { class: 'card' });
+  if (!prodi.length) { box.append(el('div', { class: 'empty' }, 'Belum ada program studi. Klik "+ Tambah Prodi".')); c.append(box); return; }
+  const wrap = el('div', { class: 'table-wrap' });
+  const t = el('table', {}, el('thead', {}, el('tr', {}, el('th', {}, 'Kode Prodi'), el('th', {}, 'Nama Prodi'), el('th', {}, 'Ketua Prodi'), el('th', {}, 'Aksi'))));
+  const tb = el('tbody', {});
+  prodi.forEach(p => tb.append(el('tr', {},
+    el('td', {}, el('b', {}, esc(p.kode))),
+    el('td', {}, esc(p.nama)),
+    el('td', {}, esc(p.ketua || '-')),
+    el('td', {}, el('div', { class: 'row' },
+      el('button', { class: 'btn btn-sm btn-ghost', onclick: () => prodiForm(p) }, 'Edit'),
+      el('button', { class: 'btn btn-sm btn-danger', onclick: () => delProdi(p.id) }, 'Hapus'))))));
+  t.append(tb); wrap.append(t); box.append(wrap); c.append(box);
+};
+
+function prodiForm(existing) {
+  const isEdit = !!existing;
+  const kode = el('input', { type: 'text', value: existing?.kode || '', placeholder: 'mis. 86201' });
+  const nama = el('input', { type: 'text', value: existing?.nama || '', placeholder: 'mis. S-3 Pendidikan' });
+  const ketua = el('input', { type: 'text', value: existing?.ketua || '', placeholder: 'Nama Ketua Prodi', list: 'kaprodiOptions' });
+  const dl = el('datalist', { id: 'kaprodiOptions' }, USERS_CACHE.filter(u => u.role === 'kaprodi' || u.role === 'dosen').map(u => el('option', { value: u.nama })));
+  const body = el('div', {},
+    el('div', { class: 'two-col' },
+      el('div', { class: 'field' }, el('label', {}, 'Kode Prodi'), kode),
+      el('div', { class: 'field' }, el('label', {}, 'Nama Prodi'), nama)),
+    el('div', { class: 'field' }, el('label', {}, 'Ketua Prodi'), ketua), dl,
+    el('button', { class: 'btn btn-primary btn-block', onclick: async () => {
+      const payload = { kode: kode.value.trim(), nama: nama.value.trim(), ketua: ketua.value.trim() };
+      if (!payload.kode || !payload.nama) return toast('Kode & Nama Prodi wajib diisi', 'err');
+      try {
+        if (isEdit) await api('/prodi/' + existing.id, { method: 'PUT', body: payload });
+        else await api('/prodi', { method: 'POST', body: payload });
+        toast('Tersimpan', 'ok'); closeModal(); navigate('prodi');
+      } catch (ex) { toast(ex.message, 'err'); }
+    } }, isEdit ? 'Simpan Perubahan' : 'Tambah Prodi'));
+  openModal(isEdit ? 'Edit Program Studi' : 'Tambah Program Studi', body);
+}
+
+async function delProdi(id) {
+  if (!confirm('Hapus program studi ini?')) return;
+  try { await api('/prodi/' + id, { method: 'DELETE' }); toast('Dihapus', 'ok'); navigate('prodi'); }
   catch (ex) { toast(ex.message, 'err'); }
 }
 
