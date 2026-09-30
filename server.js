@@ -99,6 +99,78 @@ function faseAccReady(mid, fase) {
   return pembs.every(pid => trackAccFasesSrv(DB.bimbingan.filter(b => b.mahasiswaId === mid && b.dosenId === pid)).has(fase));
 }
 
+// Onboarding mahasiswa lama: tandai fase-fase yang SUDAH dilewati (bimbingan berjalan
+// manual sebelum aplikasi). Membuat entri bimbingan sintetis (ditandai sistem:true)
+// agar ACC tiap fase terpenuhi + mengisi tanggal ujian tiap fase yang sudah lulus.
+const FASE_ORDER = ['Proposal', 'Hasil', 'Tutup', 'Promosi'];
+const FASE_JENIS = { Proposal: 'proposal', Hasil: 'hasil', Tutup: 'tutup', Promosi: 'promosi' };
+function applyStartingStage(mid, lastFase, dates, sessions, doneFases, pengajuan) {
+  const s = DB.skripsi.find(x => x.mahasiswaId === mid);
+  if (!s) return { ok: false, error: 'Data skripsi tidak ditemukan' };
+  const pembs = [s.pembimbing1, s.pembimbing2].filter(Boolean);
+  if (!pembs.length) return { ok: false, error: 'Tetapkan Promotor/Co-Promotor terlebih dahulu' };
+  // Bersihkan entri sintetis lama agar bisa dijalankan ulang (idempoten)
+  DB.bimbingan = DB.bimbingan.filter(b => !(b.sistem && b.mahasiswaId === mid));
+  dates = dates || {}; sessions = sessions || {};
+  const done = Array.isArray(doneFases) ? doneFases : [];
+  const peng = pengajuan || {};
+  const idx = FASE_ORDER.indexOf(lastFase);
+  if (idx < 0) { s.updatedAt = new Date().toISOString(); return { ok: true, completed: [] }; }
+  const completed = FASE_ORDER.slice(0, idx + 1);
+  let seq = 0;
+  const stamp = () => new Date(Date.UTC(2000, 0, 1) + (seq++) * 1000).toISOString();
+  s.ujian = s.ujian || {};
+  const pembKey = { p1: s.pembimbing1, p2: s.pembimbing2 };
+  completed.forEach(fase => {
+    const isDone = done.includes(fase); // sudah lulus ujian fase ini (ACC + ujian)
+    const examTgl = isDone ? String(dates[fase] || '').trim() : '';
+    const faseSess = sessions[fase] || {};
+    ['p1', 'p2'].forEach(pk => {
+      const pid = pembKey[pk];
+      if (!pid) return;
+      const sess = (Array.isArray(faseSess[pk]) ? faseSess[pk] : []).map(x => String(x || '').trim()).filter(Boolean);
+      const pengTgl = String(((peng[fase] || {})[pk]) || '').trim() || sess[0] || examTgl || '';
+      // Entri pengajuan (menandai fase pada jalur dosen ini)
+      DB.bimbingan.push({
+        id: uid('bmb'), mahasiswaId: mid, dosenId: pid,
+        tanggal: pengTgl, topik: 'Pengajuan bimbingan ' + fase, metode: '',
+        status: 'disetujui', dibuatOleh: 'mahasiswa', fase,
+        catatanMhs: '', catatanDosen: '', dokumen: [], sistem: true, createdAt: stamp()
+      });
+      if (sess.length) {
+        sess.forEach((d, j) => {
+          const last = j === sess.length - 1;
+          DB.bimbingan.push({
+            id: uid('bmb'), mahasiswaId: mid, dosenId: pid,
+            tanggal: d, topik: 'Bimbingan ' + fase + ' ke-' + (j + 1), metode: 'Tatap muka',
+            status: (last && isDone) ? 'acc' : 'selesai', dibuatOleh: 'dosen',
+            catatanMhs: '', catatanDosen: (last && isDone) ? 'ACC — siap diujikan (data awal).' : 'Bimbingan berjalan (data awal).',
+            dokumen: [], sistem: true, createdAt: stamp()
+          });
+        });
+      } else if (isDone) {
+        // Tanpa rincian pertemuan tapi sudah lulus: satu entri ACC agar syarat ujian terpenuhi
+        DB.bimbingan.push({
+          id: uid('bmb'), mahasiswaId: mid, dosenId: pid,
+          tanggal: examTgl || '', topik: 'ACC ' + fase + ' (data awal)', metode: 'Tatap muka',
+          status: 'acc', dibuatOleh: 'dosen',
+          catatanMhs: '', catatanDosen: 'Data migrasi manual (bimbingan berjalan sebelum aplikasi).',
+          dokumen: [], sistem: true, createdAt: stamp()
+        });
+      }
+    });
+    const jns = FASE_JENIS[fase];
+    if (isDone) {
+      const prev = s.ujian[jns] || {};
+      s.ujian[jns] = { tanggal: examTgl, penguji: prev.penguji || [], metode: prev.metode || 'luring', link: prev.link || '', tempat: prev.tempat || '' };
+    } else if (s.ujian[jns]) {
+      delete s.ujian[jns]; // belum lulus ujian -> jangan tampilkan jadwal
+    }
+  });
+  s.updatedAt = new Date().toISOString();
+  return { ok: true, completed };
+}
+
 // ------------------------------------------------------------------
 // Utilitas penyimpanan (satu file JSON, tulis atomik)
 // ------------------------------------------------------------------
@@ -489,6 +561,17 @@ async function handleApi(req, res, url, ip) {
             tahapan: DB.meta.tahapanTemplate.map(n => ({ nama: n, selesai: false, tanggal: '' })),
             updatedAt: new Date().toISOString()
           });
+          // Onboarding mahasiswa lama: set fase yang sudah dilewati bila kolom diisi
+          const lastFaseRaw = String(r.faseTerakhir || r['fase_terakhir'] || r.fase || '').trim().toLowerCase();
+          const lastFase = FASE_ORDER.find(f => f.toLowerCase() === lastFaseRaw) || '';
+          if (lastFase && p1) {
+            applyStartingStage(user.id, lastFase, {
+              Proposal: r.tglProposal || r['tgl_ujian_proposal'] || '',
+              Hasil: r.tglHasil || r['tgl_ujian_hasil'] || '',
+              Tutup: r.tglTutup || r['tgl_ujian_tutup'] || '',
+              Promosi: r.tglPromosi || r['tgl_ujian_promosi'] || ''
+            });
+          }
         }
         created++;
       });
@@ -546,6 +629,7 @@ async function handleApi(req, res, url, ip) {
       if (sk) {
         if (body.pembimbing1 !== undefined) sk.pembimbing1 = body.pembimbing1;
         if (body.pembimbing2 !== undefined) sk.pembimbing2 = body.pembimbing2;
+        if (body.judul !== undefined) sk.judul = String(body.judul);
       }
       saveDBDebounced();
       return sendJSON(res, 200, { user: publicUser(u) });
@@ -637,6 +721,17 @@ async function handleApi(req, res, url, ip) {
       if (!canAccessMahasiswa(me, mid)) return sendJSON(res, 403, { error: 'Akses ditolak' });
       return sendJSON(res, 200, { skripsi: { ...s, mahasiswa: publicUser(DB.users.find(u => u.id === mid)) } });
     }
+    // Onboarding mahasiswa lama (admin): tetapkan fase yang sudah dilewati
+    if (method === 'POST' && mid && seg[2] === 'set-stage') {
+      if (me.role !== 'admin') return sendJSON(res, 403, { error: 'Hanya admin' });
+      const body = await readBody(req);
+      const lastFase = FASE_ORDER.includes(body.lastFase) ? body.lastFase : '';
+      const r = applyStartingStage(mid, lastFase, body.dates || {}, body.sessions || {}, body.doneFases || [], body.pengajuan || {});
+      if (!r.ok) return sendJSON(res, 400, { error: r.error });
+      saveDBDebounced();
+      const s = DB.skripsi.find(x => x.mahasiswaId === mid);
+      return sendJSON(res, 200, { skripsi: { ...s, mahasiswa: publicUser(DB.users.find(u => u.id === mid)) }, completed: r.completed });
+    }
     if (method === 'PUT' && mid) {
       const s = DB.skripsi.find(x => x.mahasiswaId === mid);
       if (!s) return sendJSON(res, 404, { error: 'Data skripsi tidak ditemukan' });
@@ -669,7 +764,7 @@ async function handleApi(req, res, url, ip) {
         }
       }
       // Jadwal ujian per JENIS (berjenjang; butuh ACC semua pembimbing di fase terkait)
-      if (isOwner && body.ujianJenis && body.ujianTanggal !== undefined) {
+      if ((isOwner || me.role === 'admin') && body.ujianJenis && body.ujianTanggal !== undefined) {
         const JENIS = {
           proposal: { label: 'Ujian Seminar Proposal', fase: 'Proposal' },
           hasil: { label: 'Ujian Seminar Hasil', fase: 'Hasil' },
@@ -678,7 +773,7 @@ async function handleApi(req, res, url, ip) {
         };
         const jns = body.ujianJenis;
         if (!JENIS[jns]) return sendJSON(res, 400, { error: 'Jenis ujian tidak dikenal' });
-        if (!faseAccReady(mid, JENIS[jns].fase)) return sendJSON(res, 403, { error: 'Jadwal ' + JENIS[jns].label + ' dapat diisi setelah bimbingan tahap ini di-ACC semua pembimbing.' });
+        if (!faseAccReady(mid, JENIS[jns].fase) && me.role !== 'admin') return sendJSON(res, 403, { error: 'Jadwal ' + JENIS[jns].label + ' dapat diisi setelah bimbingan tahap ini di-ACC semua pembimbing.' });
         s.ujian = s.ujian || {};
         const prev = s.ujian[jns] || {};
         const penguji = Array.isArray(body.ujianPenguji)
