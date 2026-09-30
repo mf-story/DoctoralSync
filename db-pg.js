@@ -81,8 +81,14 @@ async function writeSnapshot(DB) {
     await client.query('DELETE FROM app_data');
     const rows = [];
     for (const c of COLLECTIONS) {
-      for (const doc of (DB[c] || [])) {
-        if (doc && doc.id != null) rows.push([c, String(doc.id), doc]);
+      const arr = DB[c] || [];
+      for (let i = 0; i < arr.length; i++) {
+        const doc = arr[i];
+        if (!doc) continue;
+        // Kunci baris: id, jika tidak ada pakai mahasiswaId (mis. koleksi skripsi), fallback indeks
+        const key = doc.id != null ? String(doc.id)
+          : (doc.mahasiswaId != null ? String(doc.mahasiswaId) : ('row_' + i));
+        rows.push([c, key, doc]);
       }
     }
     if (DB.meta) rows.push([META_KEY, 'meta', DB.meta]);
