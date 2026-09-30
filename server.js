@@ -141,24 +141,33 @@ let DB = null;
 
 // Penyimpanan: PostgreSQL bila DATABASE_URL diisi (mis. di Coolify), selain itu
 // memakai file data/db.json (mode default untuk pengembangan lokal).
-const USE_PG = !!process.env.DATABASE_URL;
+let USE_PG = !!process.env.DATABASE_URL;
 let pgStore = null;
 
 async function loadDB() {
   ensureDirs();
   if (USE_PG) {
-    pgStore = require('./db-pg');
-    await pgStore.init();
-    const { db, empty } = await pgStore.loadAll();
-    if (!empty) {
-      DB = db;
-    } else if (fs.existsSync(DB_FILE)) {
-      // Migrasi sekali: pindahkan isi db.json lama ke PostgreSQL
-      try { DB = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); }
-      catch (e) { console.error('Gagal membaca db.json untuk migrasi:', e.message); DB = null; }
-      if (DB) { console.log('Migrasi data db.json -> PostgreSQL...'); }
+    try {
+      pgStore = require('./db-pg');
+      await pgStore.init();
+      const { db, empty } = await pgStore.loadAll();
+      if (!empty) {
+        DB = db;
+      } else if (fs.existsSync(DB_FILE)) {
+        // Migrasi sekali: pindahkan isi db.json lama ke PostgreSQL
+        try { DB = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); }
+        catch (e) { console.error('Gagal membaca db.json untuk migrasi:', e.message); DB = null; }
+        if (DB) { console.log('Migrasi data db.json -> PostgreSQL...'); }
+      }
+    } catch (e) {
+      // Jangan matikan aplikasi bila DB gagal — kembali ke mode file agar tetap hidup
+      console.error('⚠ PostgreSQL tidak dapat diakses (' + e.message + '). Fallback ke file data/db.json.');
+      USE_PG = false;
+      pgStore = null;
+      DB = null;
     }
-  } else if (fs.existsSync(DB_FILE)) {
+  }
+  if (!DB && !USE_PG && fs.existsSync(DB_FILE)) {
     try {
       DB = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
     } catch (e) {
