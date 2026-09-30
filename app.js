@@ -700,6 +700,11 @@ VIEWS.bimbingan = async (c) => {
         el('span', { class: 'row', style: 'gap:10px' },
           needAtt ? el('span', { class: 'attn-badge', title: 'Ada balasan/revisi atau pengajuan baru dari mahasiswa' }, '💬 ' + needAtt + ' perlu ditindak') : null,
           el('span', { class: 'muted small' }, revisi.length + ' bimbingan' + (belumCount ? ' · ' + belumCount + ' belum selesai' : '')),
+          ME.role === 'dosen' ? el('button', { class: 'btn btn-ghost btn-sm', onclick: (e) => {
+            e.stopPropagation();
+            const label = sk && sk.pembimbing2 === ME.id ? 'Co-Promotor' : 'Promotor';
+            cetakKartuKontrol({ label, id: ME.id }, list.filter(b => b.dosenId === ME.id), sk);
+          } }, '🖨️ Kartu Kontrol') : null,
           ME.role === 'dosen' ? el('button', { class: 'btn btn-ghost btn-sm', onclick: (e) => { e.stopPropagation(); arsipkanLulus(mid, list[0].mahasiswaNama || userName(mid)); } }, '🎓 Arsipkan') : null,
           chevron));
       card.append(header, groupEl);
@@ -815,7 +820,8 @@ function cetakKartuKontrol(p, list, skripsi) {
     };
   });
   const hari = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-  const mhsNama = ME.nama, mhsNim = ME.username || '-', prodi = ME.prodi || '-';
+  const mhs = (skripsi && skripsi.mahasiswa) || userObj(skripsi && skripsi.mahasiswaId) || (ME.role === 'mahasiswa' ? ME : null) || {};
+  const mhsNama = mhs.nama || '-', mhsNim = mhs.username || '-', prodi = mhs.prodi || '-';
   const judul = (skripsi && skripsi.judul) || '(Judul belum ditetapkan)';
   const dosenNama = userName(p.id), dosenNuptk = userNomor(p.id) || '-';
   const trs = rows.length
@@ -826,7 +832,8 @@ function cetakKartuKontrol(p, list, skripsi) {
   * { box-sizing: border-box; }
   @page { size: A4; margin: 14mm; }
   body { font-family: 'Segoe UI', Arial, sans-serif; color: #16233d; margin: 24px; font-size: 12px; }
-  .head { text-align: center; border-bottom: 3px double #0045a6; padding-bottom: 10px; margin-bottom: 14px; }
+  .head { position: relative; text-align: center; border-bottom: 3px double #0045a6; padding-bottom: 10px; margin-bottom: 14px; min-height: 76px; }
+  .head .logo { position: absolute; left: 4px; top: 0; width: 72px; height: 72px; object-fit: contain; }
   .head h1 { margin: 0; font-size: 18px; letter-spacing: .5px; color: #0045a6; }
   .head .sub { font-size: 13px; font-weight: 600; margin-top: 2px; }
   .head .uni { font-size: 14px; font-weight: 800; margin-top: 1px; color: #0045a6; }
@@ -848,6 +855,7 @@ function cetakKartuKontrol(p, list, skripsi) {
 </style></head><body>
 <div class="noprint"><button class="btnp" id="btnCetak">🖨️ Cetak / Simpan PDF</button></div>
 <div class="head">
+  <img class="logo" src="${location.origin}/logo-unismuh.png" alt="Logo Unismuh Makassar">
   <h1>KARTU KONTROL BIMBINGAN DISERTASI</h1>
   <div class="sub">Program Studi S-3 Pendidikan Program Pascasarjana</div>
   <div class="uni">Universitas Muhammadiyah Makassar</div>

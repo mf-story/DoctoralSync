@@ -139,9 +139,26 @@ const DEFAULT_TAHAPAN = [
 
 let DB = null;
 
-function loadDB() {
+// Penyimpanan: PostgreSQL bila DATABASE_URL diisi (mis. di Coolify), selain itu
+// memakai file data/db.json (mode default untuk pengembangan lokal).
+const USE_PG = !!process.env.DATABASE_URL;
+let pgStore = null;
+
+async function loadDB() {
   ensureDirs();
-  if (fs.existsSync(DB_FILE)) {
+  if (USE_PG) {
+    pgStore = require('./db-pg');
+    await pgStore.init();
+    const { db, empty } = await pgStore.loadAll();
+    if (!empty) {
+      DB = db;
+    } else if (fs.existsSync(DB_FILE)) {
+      // Migrasi sekali: pindahkan isi db.json lama ke PostgreSQL
+      try { DB = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); }
+      catch (e) { console.error('Gagal membaca db.json untuk migrasi:', e.message); DB = null; }
+      if (DB) { console.log('Migrasi data db.json -> PostgreSQL...'); }
+    }
+  } else if (fs.existsSync(DB_FILE)) {
     try {
       DB = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
     } catch (e) {
@@ -170,7 +187,7 @@ function loadDB() {
       password: hashPassword('admin123'),
       createdAt: new Date().toISOString()
     });
-    try { saveDB(); } catch (e) { console.error('Gagal menulis db.json awal (cek izin tulis volume /app/data):', e.message); }
+    try { await saveDB(); } catch (e) { console.error('Gagal menulis DB awal:', e.message); }
     console.log('DB baru dibuat. Login admin default: admin / admin123');
   }
   // migrasi ringan
@@ -191,18 +208,21 @@ function loadDB() {
       } else { u.foto = ''; avatarMigrated = true; }
     }
   });
-  if (avatarMigrated) { try { saveDB(); } catch (e) { console.error('Gagal menyimpan migrasi foto:', e.message); } }
+  if (avatarMigrated) { try { await saveDB(); } catch (e) { console.error('Gagal menyimpan migrasi foto:', e.message); } }
+  // Pastikan state tersimpan di PostgreSQL saat mode DB aktif (termasuk migrasi db.json -> PG)
+  if (USE_PG) { try { await saveDB(); } catch (e) { console.error('Gagal persist awal ke PostgreSQL:', e.message); } }
 }
 
 let saveTimer = null;
 function saveDB() {
+  if (USE_PG) return pgStore.persist(DB);
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(DB, null, 2), 'utf8');
   fs.renameSync(tmp, DB_FILE);
 }
 function saveDBDebounced() {
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { try { saveDB(); } catch (e) { console.error(e); } }, 150);
+  saveTimer = setTimeout(() => { try { const r = saveDB(); if (r && r.catch) r.catch(e => console.error(e)); } catch (e) { console.error(e); } }, 150);
 }
 
 // ------------------------------------------------------------------
@@ -1202,7 +1222,6 @@ function sameOriginOk(req, url) {
 // ------------------------------------------------------------------
 // Server
 // ------------------------------------------------------------------
-loadDB();
 
 function requestHandler(req, res) {
   setSecurityHeaders(res);
@@ -1260,15 +1279,24 @@ if (tlsOptions) {
   } catch (e) { console.error('Gagal memuat sertifikat TLS:', e.message); httpsServer = null; }
 }
 
-httpServer.listen(PORT, HOST, () => {
-  console.log('===================================================');
-  console.log('  DoctoralSync — Sistem Bimbingan Disertasi berjalan');
-  console.log('  HTTP    : http://localhost:' + PORT);
-  if (httpsServer) console.log('  HTTPS   : https://localhost:' + HTTPS_PORT + '  (disarankan, anti-MitM)');
-  else console.log('  HTTPS   : nonaktif — jalankan "buat-sertifikat.cmd" lalu restart untuk mengaktifkan');
-  console.log('  Jaringan: http://<IP-Anda>:' + PORT);
-  console.log('  Login default admin -> admin / admin123');
-  console.log('  Notifikasi WA: ' + (WA_API_URL ? ('AKTIF -> ' + WA_API_URL) : 'nonaktif (set WA_API_URL / jalankan wa-server)'));
-  console.log('===================================================');
-});
-if (httpsServer) httpsServer.listen(HTTPS_PORT, HOST, () => console.log('  [HTTPS aktif] https://localhost:' + HTTPS_PORT));
+(async () => {
+  try {
+    await loadDB();
+  } catch (e) {
+    console.error('Gagal inisialisasi database:', e);
+    process.exit(1);
+  }
+  httpServer.listen(PORT, HOST, () => {
+    console.log('===================================================');
+    console.log('  DoctoralSync — Sistem Bimbingan Disertasi berjalan');
+    console.log('  HTTP    : http://localhost:' + PORT);
+    if (httpsServer) console.log('  HTTPS   : https://localhost:' + HTTPS_PORT + '  (disarankan, anti-MitM)');
+    else console.log('  HTTPS   : nonaktif — jalankan "buat-sertifikat.cmd" lalu restart untuk mengaktifkan');
+    console.log('  Jaringan: http://<IP-Anda>:' + PORT);
+    console.log('  Login default admin -> admin / admin123');
+    console.log('  Penyimpanan: ' + (USE_PG ? 'PostgreSQL (DATABASE_URL)' : 'file data/db.json'));
+    console.log('  Notifikasi WA: ' + (WA_API_URL ? ('AKTIF -> ' + WA_API_URL) : 'nonaktif (set WA_API_URL / jalankan wa-server)'));
+    console.log('===================================================');
+  });
+  if (httpsServer) httpsServer.listen(HTTPS_PORT, HOST, () => console.log('  [HTTPS aktif] https://localhost:' + HTTPS_PORT));
+})();

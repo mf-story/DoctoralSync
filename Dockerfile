@@ -1,7 +1,11 @@
-# DoctoralSync — hanya memakai modul bawaan Node.js (tanpa dependency npm)
+# DoctoralSync — Node.js + driver PostgreSQL (pg)
 FROM node:20-alpine
 
 WORKDIR /app
+
+# Pasang dependency dulu (memanfaatkan cache layer)
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev || npm install --omit=dev
 
 # Salin sumber aplikasi. data/, uploads/, certs/ dikecualikan lewat .dockerignore
 COPY . .
