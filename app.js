@@ -45,13 +45,13 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric
 const fmtDateTime = d => d ? new Date(d).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
 // Jenis ujian doktor (berjenjang). fase = syarat ACC bimbingan yang harus terpenuhi.
 const UJIAN_TYPES = [
-  { key: 'proposal', label: 'Ujian Seminar Proposal', fase: 'Proposal', nextFase: 'Hasil', nextLabel: 'Seminar Hasil' },
+  { key: 'proposal', label: 'Ujian Seminar Proposal', fase: 'Proposal', nextFase: 'Instrumen', nextLabel: 'Instrumen Penelitian' },
   { key: 'hasil', label: 'Ujian Seminar Hasil', fase: 'Hasil', nextFase: 'Tutup', nextLabel: 'Seminar Tutup' },
   { key: 'tutup', label: 'Ujian Seminar Tutup', fase: 'Tutup', nextFase: 'Promosi', nextLabel: 'Promosi Doktor' },
   { key: 'promosi', label: 'Ujian Promosi Doktor', fase: 'Promosi', nextFase: null, nextLabel: null }
 ];
 const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
-const roleLabel = r => ({ mahasiswa: 'Mahasiswa', dosen: 'Dosen', admin: 'Admin Prodi', kaprodi: 'Ketua Prodi' }[r] || r);
+const roleLabel = r => ({ mahasiswa: 'Mahasiswa', dosen: 'Dosen', admin: 'Admin Prodi', kaprodi: 'Ketua Prodi', validator: 'Validator' }[r] || r);
 const statusLabel = s => ({ diajukan: 'diajukan', disetujui: 'disetujui', dijadwalkan: 'dijadwalkan', revisi: (ME && ME.role === 'mahasiswa') ? 'perlu revisi' : 'belum direvisi', direvisi: 'sudah direvisi', acc: 'ACC', selesai: 'selesai', batal: 'batal' }[s] || s);
 const userName = id => (USERS_CACHE.find(u => u.id === id) || {}).nama || '-';
 const userObj = id => USERS_CACHE.find(u => u.id === id) || null;
@@ -381,7 +381,7 @@ async function startApp() {
   });
   // Menu "Dashboard" tampil sebagai "Profil" untuk mahasiswa & dosen
   const dashNav = document.querySelector('.nav-item[data-view="dashboard"]');
-  if (dashNav) dashNav.textContent = (ME.role === 'mahasiswa' || ME.role === 'dosen') ? '👤 Profil' : '📊 Dashboard';
+  if (dashNav) dashNav.textContent = (ME.role === 'mahasiswa' || ME.role === 'dosen' || ME.role === 'validator') ? '👤 Profil' : '📊 Dashboard';
   // muat cache user bila boleh
   try { const d = await api('/users'); USERS_CACHE = d.users; } catch (e) { USERS_CACHE = [ME]; }
   navigate('dashboard');
@@ -416,7 +416,7 @@ const VIEWS = {};
 // ---------------- DASHBOARD / PROFIL ----------------
 VIEWS.dashboard = async (c) => {
   c.innerHTML = '';
-  const isProfil = ME.role === 'mahasiswa' || ME.role === 'dosen';
+  const isProfil = ME.role === 'mahasiswa' || ME.role === 'dosen' || ME.role === 'validator';
   c.append(pageHead(isProfil ? 'Profil Saya' : 'Dashboard'));
 
   if (ME.role === 'mahasiswa') {
@@ -453,6 +453,13 @@ VIEWS.dashboard = async (c) => {
         el('div', { class: 'muted small', style: 'margin:4px 0 0' }, esc(s.judul || '(belum ada judul)'))));
     });
     c.append(box);
+  } else if (ME.role === 'validator') {
+    c.append(profilCard());
+    const { validasi } = await api('/validasi').catch(() => ({ validasi: [] }));
+    const pend = (validasi || []).filter(v => !(v.instrumen && v.instrumen.status)).length;
+    c.append(el('div', { class: 'card mt', style: 'cursor:pointer', onclick: () => navigate('validasi') },
+      el('h3', { style: 'margin:0' }, '🧪 Validasi Instrumen'),
+      el('div', { class: 'muted small', style: 'margin-top:4px' }, (validasi || []).length + ' mahasiswa' + (pend ? ' · ' + pend + ' menunggu validasi' : '') + ' · klik untuk membuka →')));
   } else { // admin / kaprodi
     const { ringkasan, mahasiswa } = await api('/stats');
     c.append(el('div', { class: 'grid grid-stats' },
@@ -533,8 +540,9 @@ async function renderSkripsiCard(c, mahasiswaId, dosenView) {
 
 // Onboarding mahasiswa lama (admin): tetapkan fase yang sudah dilewati + jumlah & tanggal bimbingan
 function openSetStageModal(skripsi, mahasiswaId) {
-  const FASES = ['Proposal', 'Hasil', 'Tutup', 'Promosi'];
+  const FASES = ['Proposal', 'Instrumen', 'Hasil', 'Tutup', 'Promosi'];
   const cur = skripsi && skripsi.ujian ? skripsi.ujian : {};
+  const inst = (skripsi && skripsi.instrumen) ? skripsi.instrumen : {};
   const JNS = { Proposal: 'proposal', Hasil: 'hasil', Tutup: 'tutup', Promosi: 'promosi' };
   const pembs = [];
   if (skripsi && skripsi.pembimbing1) pembs.push({ key: 'p1', label: 'Promotor', id: skripsi.pembimbing1 });
@@ -556,15 +564,18 @@ function openSetStageModal(skripsi, mahasiswaId) {
     FASES.slice(0, idx + 1).forEach(f => {
       const card = el('div', { class: 'card', style: 'margin-bottom:10px;padding:12px' });
       card.append(el('h4', { style: 'margin:0 0 8px' }, '📌 ' + f));
-      // Checkbox status ujian: dicentang bila sudah lulus ujian fase ini
+      const isInstrumen = f === 'Instrumen';
+      const curTgl = isInstrumen ? (inst.tanggal || '') : ((cur[JNS[f]] || {}).tanggal || '');
+      const curDone = isInstrumen ? (inst.status === 'valid') : !!((cur[JNS[f]] || {}).tanggal);
+      // Checkbox status: sudah lulus ujian (atau tervalidasi untuk Instrumen)
       const doneChk = el('input', { type: 'checkbox', 'data-examdone': f });
-      if ((cur[JNS[f]] || {}).tanggal) doneChk.checked = true;
-      const dateField = el('div', { class: 'field' }, el('label', {}, 'Tanggal Ujian ' + f),
-        el('input', { type: 'date', value: (cur[JNS[f]] || {}).tanggal || '', 'data-exam': f }));
+      if (curDone) doneChk.checked = true;
+      const dateField = el('div', { class: 'field' }, el('label', {}, isInstrumen ? 'Tanggal Validasi Instrumen' : ('Tanggal Ujian ' + f)),
+        el('input', { type: 'date', value: curTgl, 'data-exam': f }));
       dateField.style.display = doneChk.checked ? '' : 'none';
       doneChk.addEventListener('change', () => { dateField.style.display = doneChk.checked ? '' : 'none'; });
       card.append(el('label', { class: 'row', style: 'gap:8px;align-items:center;cursor:pointer;margin-bottom:6px' },
-        doneChk, el('span', {}, 'Sudah lulus ujian ' + f + ' (centang bila ujian sudah dilaksanakan)')));
+        doneChk, el('span', {}, isInstrumen ? 'Instrumen sudah tervalidasi (centang bila sudah divalidasi)' : ('Sudah lulus ujian ' + f + ' (centang bila ujian sudah dilaksanakan)'))));
       card.append(dateField);
       pembs.forEach(p => {
         const pengInp = el('input', { type: 'date', 'data-pengajuan-fase': f, 'data-pengajuan-pemb': p.key });
@@ -899,6 +910,33 @@ VIEWS.ujian = async (c) => {
   };
   if (akan.length) { c.append(el('h3', { style: 'margin:6px 0 10px' }, 'Akan Datang (' + akan.length + ')')); akan.forEach(u => c.append(card(u))); }
   if (lalu.length) { c.append(el('h3', { style: 'margin:18px 0 10px' }, 'Telah Berlangsung (' + lalu.length + ')')); lalu.forEach(u => c.append(card(u))); }
+};
+
+// ---------------- VALIDASI INSTRUMEN (validator) ----------------
+VIEWS.validasi = async (c) => {
+  c.innerHTML = '';
+  c.append(pageHead('🧪 Validasi Instrumen'));
+  const { validasi } = await api('/validasi');
+  if (!validasi.length) { c.append(el('div', { class: 'empty' }, 'Belum ada mahasiswa yang perlu Anda validasi instrumennya. Daftar muncul setelah bimbingan instrumen di-ACC kedua pembimbing.')); return; }
+  const pending = validasi.filter(v => !(v.instrumen && v.instrumen.status));
+  const done = validasi.filter(v => v.instrumen && v.instrumen.status);
+  const statusTag = v => (v.instrumen && v.instrumen.status === 'valid') ? el('span', { class: 'tag selesai' }, 'valid')
+    : (v.instrumen && v.instrumen.status === 'perbaikan') ? el('span', { class: 'tag revisi' }, 'perlu perbaikan')
+      : el('span', { class: 'tag revisi' }, 'menunggu validasi');
+  const card = v => el('div', { class: 'card', style: 'margin-bottom:12px' },
+    el('div', { class: 'row-between', style: 'gap:8px;flex-wrap:wrap;align-items:flex-start' },
+      el('div', { style: 'min-width:0' },
+        el('h3', { style: 'margin:0' }, esc(v.mahasiswaNama) + (v.mahasiswaNim ? ' · NIM ' + esc(v.mahasiswaNim) : '')),
+        v.judul ? el('div', { class: 'muted small', style: 'margin-top:2px' }, esc(v.judul)) : null,
+        el('div', { class: 'muted small', style: 'margin-top:2px' }, 'Promotor: ' + esc(v.promotor) + ' · Co-Promotor: ' + esc(v.copromotor))),
+      el('div', { class: 'row', style: 'gap:8px;align-items:center;flex:0 0 auto' },
+        statusTag(v),
+        el('button', { class: 'btn btn-primary btn-sm', onclick: async () => {
+          const [{ skripsi }, docsRes] = await Promise.all([api('/skripsi/' + v.mahasiswaId), api('/documents?mahasiswaId=' + v.mahasiswaId).catch(() => ({ documents: [] }))]);
+          openValidasiInstrumenModal(skripsi, docsRes.documents || [], () => navigate('validasi'), v.ready, []);
+        } }, '🧪 Validasi'))));
+  if (pending.length) { c.append(el('h3', { style: 'margin:6px 0 10px' }, 'Menunggu Validasi (' + pending.length + ')')); pending.forEach(v => c.append(card(v))); }
+  if (done.length) { c.append(el('h3', { style: 'margin:18px 0 10px' }, 'Sudah Divalidasi (' + done.length + ')')); done.forEach(v => c.append(card(v))); }
 };
 
 // ---------------- ARSIP (dosen) ----------------
@@ -1254,10 +1292,14 @@ function bimbinganGroup(ordered, opts) {
     els.push(itemEl);
     if (b.status === 'acc') {
       if (opts && opts.inlineUjian && opts.skripsi) {
-        const t = UJIAN_TYPES.find(x => x.fase === fase);
         const ready = !opts.accReady || opts.accReady(fase);
         const pending = opts.pendingAcc ? opts.pendingAcc(fase) : [];
-        if (t && !insertedUjian[fase]) { els.push(ujianTimelineRow(opts.skripsi, t, opts.docs, opts.reload, ready, pending)); insertedUjian[fase] = true; }
+        if (fase === 'Instrumen') {
+          if (!insertedUjian['Instrumen']) { els.push(validasiInstrumenRow(opts.skripsi, opts.docs, opts.reload, ready, pending)); insertedUjian['Instrumen'] = true; }
+        } else {
+          const t = UJIAN_TYPES.find(x => x.fase === fase);
+          if (t && !insertedUjian[fase]) { els.push(ujianTimelineRow(opts.skripsi, t, opts.docs, opts.reload, ready, pending)); insertedUjian[fase] = true; }
+        }
       } else if (!(opts && opts.combinedUjian)) {
         els.push(jadwalUjianRow(b, opts, fase));
       }
@@ -1324,6 +1366,101 @@ function openUjianModal(skripsi, type, allDocs, reload, ready, pending) {
   ready = ready !== false;
   const pendingMsg = 'Jadwal baru dapat diisi setelah Promotor & Co-Promotor ACC' + ((pending && pending.length) ? ' · menunggu: ' + pending.join(', ') : '');
   openModal('🎓 ' + type.label, jadwalUjianCard(skripsi, type, ready, pendingMsg, allDocs, () => { closeModal(); reload && reload(); }), { wide: false });
+}
+
+// Baris Validasi Instrumen (menyisip di timeline fase Instrumen, setelah ACC kedua pembimbing).
+function validasiInstrumenRow(skripsi, allDocs, reload, ready, pending) {
+  ready = ready !== false;
+  pending = pending || [];
+  const mid = skripsi.mahasiswaId;
+  const inst = skripsi.instrumen || {};
+  const docs = (allDocs || []).filter(d => d.bimbinganId === 'instrumen:' + mid);
+  const row = el('div', { class: 'list-item bimb-item ujian', style: 'cursor:pointer', onclick: () => openValidasiInstrumenModal(skripsi, allDocs, reload, ready, pending) });
+  const tag = inst.status === 'valid' ? el('span', { class: 'tag selesai' }, 'tervalidasi')
+    : inst.status === 'perbaikan' ? el('span', { class: 'tag revisi' }, 'perlu perbaikan')
+      : el('span', { class: 'tag revisi' }, ready ? 'menunggu validasi' : 'terkunci');
+  row.append(el('div', { class: 'li-head' },
+    el('span', { class: 'bimb-no ujian' }, '🧪 Validasi Instrumen'),
+    tag,
+    el('span', { class: 'spacer', style: 'flex:1' }),
+    el('span', { class: 'muted small' }, inst.tanggal ? fmtDate(inst.tanggal) : '')));
+  let desc;
+  if (inst.status === 'valid') desc = '✅ Instrumen valid' + (inst.tanggal ? ' · ' + fmtDate(inst.tanggal) : '');
+  else if (inst.status === 'perbaikan') desc = '✏️ Perlu perbaikan instrumen';
+  else if (!ready) desc = '🔒 Menunggu ACC ' + (pending.length ? pending.join(' & ') : 'kedua pembimbing');
+  else desc = 'Validator: ' + (userName(skripsi.validatorId) || '(belum ditetapkan)') + ' — menunggu validasi';
+  row.append(el('div', { class: 'small', style: 'margin-top:4px;color:' + ((!ready && !inst.status) ? 'var(--red)' : 'var(--primary)') },
+    desc + (docs.length ? ' · 📎 ' + docs.length + ' berkas' : '')));
+  return row;
+}
+function openValidasiInstrumenModal(skripsi, allDocs, reload, ready, pending) {
+  openModal('🧪 Validasi Instrumen Penelitian', validasiInstrumenCard(skripsi, allDocs, () => { closeModal(); reload && reload(); }, ready, pending), { wide: false });
+}
+function validasiInstrumenCard(skripsi, allDocs, reload, ready, pending) {
+  ready = ready !== false;
+  pending = pending || [];
+  const mid = skripsi.mahasiswaId;
+  const key = 'instrumen:' + mid;
+  const inst = skripsi.instrumen || {};
+  const docs = (allDocs || []).filter(d => d.bimbinganId === key);
+  const isMhsOwn = ME.role === 'mahasiswa' && ME.id === mid;
+  const isValidator = ME.role === 'validator' && (!skripsi.validatorId || ME.id === skripsi.validatorId);
+  const canValidate = isValidator || ME.role === 'admin';
+  const card = el('div', { class: 'card', style: 'margin-top:14px' });
+  card.append(el('div', { class: 'li-head' },
+    el('span', { class: 'bimb-no ujian' }, '🧪 Validasi Instrumen Penelitian'),
+    inst.status === 'valid' ? el('span', { class: 'tag selesai' }, 'valid')
+      : inst.status === 'perbaikan' ? el('span', { class: 'tag revisi' }, 'perlu perbaikan')
+        : el('span', { class: 'tag revisi' }, ready ? 'menunggu validasi' : 'terkunci')));
+  card.append(el('div', { class: 'muted small', style: 'margin-top:6px' }, 'Validator: ' + esc(userName(skripsi.validatorId) || '(belum ditetapkan)')));
+  if (!ready && !inst.status) card.append(el('div', { class: 'small', style: 'margin-top:6px;color:var(--red)' }, '🔒 Validasi dibuka setelah bimbingan instrumen di-ACC kedua pembimbing' + (pending.length ? ' · menunggu: ' + pending.join(', ') : '')));
+  if (inst.tanggal) card.append(el('div', { style: 'margin-top:6px' }, el('span', { class: 'muted small' }, 'Tanggal validasi: '), fmtDate(inst.tanggal)));
+  if (inst.catatan) card.append(el('div', { class: 'note-revisi', style: 'margin-top:8px' }, '📝 ' + esc(inst.catatan)));
+  if (docs.length) { card.append(el('div', { class: 'muted small', style: 'margin:8px 0 4px' }, 'Lembar validasi:')); docs.forEach(d => card.append(docToggleBlock(d))); }
+
+  if (canValidate && ready) {
+    const tgl = el('input', { type: 'date', value: inst.tanggal || new Date().toISOString().slice(0, 10) });
+    const status = el('select', {}, el('option', { value: 'valid' }, 'Valid'), el('option', { value: 'perbaikan' }, 'Perlu perbaikan'));
+    status.value = inst.status || 'valid';
+    const catatan = el('textarea', { rows: 3, placeholder: 'Catatan validasi (opsional)…' }, inst.catatan || '');
+    const fileInput = el('input', { type: 'file', accept: '.pdf' });
+    const uploadedBox = el('div', { style: 'margin-top:6px' });
+    const uploadBtn = el('button', { class: 'btn btn-ghost', onclick: async () => {
+      const f = fileInput.files[0];
+      if (!f) return toast('Pilih file PDF dulu', 'err');
+      if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) return toast('Hanya berkas PDF', 'err');
+      if (f.size > 12 * 1024 * 1024) return toast('Berkas melebihi 12MB', 'err');
+      try {
+        const dataUrl = await readFileDataUrl(f);
+        const res = await api('/documents', { method: 'POST', body: { nama: f.name, dataUrl, bimbinganId: key, mahasiswaId: mid } });
+        toast('Lembar validasi terupload', 'ok'); fileInput.value = '';
+        uploadedBox.append(el('div', { class: 'muted small' }, '📄 ' + esc(res.document.nama) + ' ✓'));
+      } catch (ex) { toast(ex.message, 'err'); }
+    } }, '⬆️ Upload Lembar Validasi');
+    const saveBtn = el('button', { class: 'btn btn-primary btn-block mt', onclick: async () => {
+      try {
+        await api('/skripsi/' + mid, { method: 'PUT', body: { instrumen: { tanggal: tgl.value, status: status.value, catatan: catatan.value.trim() } } });
+        toast('Validasi instrumen tersimpan', 'ok'); reload && reload();
+      } catch (ex) { toast(ex.message, 'err'); }
+    } }, 'Simpan Validasi');
+    card.append(el('hr', { style: 'border:none;border-top:1px solid var(--line);margin:12px 0' }),
+      el('div', { class: 'field' }, el('label', {}, 'Tanggal Validasi'), tgl),
+      el('div', { class: 'field' }, el('label', {}, 'Status'), status),
+      el('div', { class: 'field' }, el('label', {}, 'Catatan'), catatan),
+      el('div', { class: 'field' }, el('label', {}, 'Lembar Validasi (PDF)'), fileInput), uploadBtn, uploadedBox, saveBtn);
+  }
+  if (isMhsOwn && inst.status === 'valid') {
+    const p1 = skripsi.pembimbing1, p2 = skripsi.pembimbing2;
+    card.append(el('hr', { style: 'border:none;border-top:1px solid var(--line);margin:14px 0' }),
+      el('div', { class: 'note-acc' }, '✅ Instrumen valid. Ajukan bimbingan Hasil:'),
+      el('div', { class: 'row', style: 'gap:8px' },
+        p1 ? el('button', { class: 'btn btn-primary btn-sm', onclick: () => ajukanBimbinganForm(reload, p1, 'Hasil') }, '➡️ ke Promotor') : null,
+        p2 ? el('button', { class: 'btn btn-primary btn-sm', onclick: () => ajukanBimbinganForm(reload, p2, 'Hasil') }, '➡️ ke Co-Promotor') : null));
+  }
+  if (isMhsOwn && inst.status === 'perbaikan') {
+    card.append(el('div', { class: 'note-revisi', style: 'margin-top:8px' }, '✏️ Validator meminta perbaikan instrumen. Perbaiki lalu lanjutkan bimbingan instrumen dengan pembimbing sebelum divalidasi ulang.'));
+  }
+  return card;
 }
 
 // Set fase yang sudah ACC untuk satu jalur (dosen) — mengikuti logika fase bimbinganGroup.
@@ -1461,6 +1598,11 @@ function jadwalUjianCard(skripsi, type, ready, pendingMsg, allDocs, reload) {
       form.hidden = true;
       const editBtn = el('button', { class: 'btn btn-ghost btn-sm mt', onclick: () => { form.hidden = false; editBtn.hidden = true; } }, '✏️ Edit Jadwal');
       card.append(editBtn, form);
+      if (ME.role === 'admin') card.append(el('button', { class: 'btn btn-ghost btn-sm mt', style: 'color:var(--red)', onclick: async () => {
+        if (!confirm('Hapus jadwal ' + type.label + ' mahasiswa ini?')) return;
+        try { await api('/skripsi/' + mid, { method: 'PUT', body: { ujianJenis: type.key, ujianHapus: true } }); toast('Jadwal ujian dihapus', 'ok'); reload && reload(); }
+        catch (ex) { toast(ex.message, 'err'); }
+      } }, '🗑️ Hapus Jadwal'));
     } else {
       card.append(el('div', { class: 'note-acc', style: 'margin-top:8px' }, 'Lengkapi jadwal ' + type.label.toLowerCase() + ' & unggah berkas.'));
       docs.forEach(d => card.append(docToggleBlock(d)));
@@ -1586,6 +1728,24 @@ async function bimbinganForm(existing, fixedMahasiswaId, onDone, judulForm) {
   const partnerSelect = el('select', {}, ...opts);
   if (!skripsi.length) { toast('Belum ada mahasiswa bimbingan', 'err'); return; }
   body.append(el('div', { class: 'field' }, el('label', {}, 'Mahasiswa'), partnerSelect));
+  // Dokumen mahasiswa (lihat file & tanda/catatan) agar dosen bisa memeriksa saat minta revisi
+  const docsBox = el('div', { style: 'margin-bottom:10px' });
+  body.append(docsBox);
+  async function loadRevisiDocs() {
+    docsBox.innerHTML = '';
+    const mid = partnerSelect.value;
+    if (!mid) return;
+    try {
+      const { documents } = await api('/documents?mahasiswaId=' + mid);
+      const pdfs = (documents || []).filter(d => /\.pdf$/i.test(d.file || ''))
+        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 1);
+      if (!pdfs.length) { docsBox.append(el('div', { class: 'muted small' }, 'Belum ada dokumen dari mahasiswa.')); return; }
+      docsBox.append(el('label', { style: 'display:block;font-weight:700;margin-bottom:4px' }, '📄 Dokumen Revisi Terakhir'));
+      pdfs.forEach(d => docsBox.append(docToggleBlock(d)));
+    } catch (ex) { /* abaikan bila gagal memuat dokumen */ }
+  }
+  partnerSelect.addEventListener('change', loadRevisiDocs);
+  loadRevisiDocs();
   const tgl = el('input', { type: 'date', value: new Date().toISOString().slice(0, 10) });
   const PRESET_TOPIK = ['Judul', 'Abstrak', 'Bab 1', 'Bab 2', 'Bab 3', 'Bab 4', 'Bab 5', 'Kajian Teori', 'Metodologi Penelitian', 'Instrumen', 'Analisis Data', 'Tata Tulis & Sitasi', 'Daftar Pustaka'];
   const topikSelected = new Set();
@@ -1600,37 +1760,47 @@ async function bimbinganForm(existing, fixedMahasiswaId, onDone, judulForm) {
   topikInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addTopikCustom(); } });
   const topikAddBtn = el('button', { type: 'button', class: 'btn btn-sm', onclick: addTopikCustom }, 'Tambah');
   renderTopikChips();
-  const metode = el('select', {}, el('option', { value: 'Tatap muka' }, 'Tatap muka'), el('option', { value: 'Daring' }, 'Daring'));
+  const metode = el('select', {}, el('option', { value: 'Synchronous' }, 'Synchronous (pertemuan terjadwal)'), el('option', { value: 'Asynchronous' }, 'Asynchronous (tanpa pertemuan)'));
+  const tipe = el('select', {}, el('option', { value: 'Luring' }, 'Luring (tatap muka)'), el('option', { value: 'Daring' }, 'Daring (online)'));
   const tempat = el('input', { type: 'text', placeholder: 'mis. Ruang Prodi / Lab Komputer' });
-  const aplikasi = el('select', {}, el('option', {}, 'Aplikasi ini'), el('option', {}, 'Virtual Meet'));
-  const fieldTempat = el('div', { class: 'field' }, el('label', {}, 'Tempat'), tempat);
-  const fieldAplikasi = el('div', { class: 'field' }, el('label', {}, 'Media'), aplikasi);
+  const link = el('input', { type: 'url', placeholder: 'https://… (Zoom / Google Meet)' });
+  const fieldTipe = el('div', { class: 'field' }, el('label', {}, 'Tipe Synchronous'), tipe);
+  const fieldTgl = el('div', { class: 'field' }, el('label', {}, 'Tanggal'), tgl);
+  const fieldTempat = el('div', { class: 'field' }, el('label', {}, '📍 Tempat / Ruangan'), tempat);
+  const fieldLink = el('div', { class: 'field' }, el('label', {}, '🔗 Link Virtual Meeting'), link);
   const catatan = el('textarea', { rows: 4, placeholder: 'Tulis catatan revisi / perbaikan yang harus dilakukan mahasiswa…' });
   function toggleMetode() {
-    const isTM = metode.value === 'Tatap muka';
-    fieldTempat.style.display = isTM ? '' : 'none';
-    fieldAplikasi.style.display = isTM ? 'none' : '';
+    const sync = metode.value === 'Synchronous';
+    const luring = tipe.value === 'Luring';
+    fieldTipe.style.display = sync ? '' : 'none';
+    fieldTgl.style.display = sync ? '' : 'none';
+    fieldTempat.style.display = (sync && luring) ? '' : 'none';
+    fieldLink.style.display = (sync && !luring) ? '' : 'none';
   }
   metode.addEventListener('change', toggleMetode);
+  tipe.addEventListener('change', toggleMetode);
   body.append(
-    el('div', { class: 'two-col' },
-      el('div', { class: 'field' }, el('label', {}, 'Tanggal'), tgl),
-      el('div', { class: 'field' }, el('label', {}, 'Metode'), metode)),
-    fieldTempat, fieldAplikasi,
+    el('div', { class: 'field' }, el('label', {}, 'Metode'), metode),
+    fieldTipe, fieldTgl, fieldTempat, fieldLink,
     el('div', { class: 'field' },
       el('label', {}, 'Topik / Materi ', el('span', { style: 'color:var(--red)' }, '*')),
       topikChips,
       el('div', { class: 'two-col', style: 'grid-template-columns:1fr auto;gap:8px;align-items:end' }, topikInput, topikAddBtn)),
     el('div', { class: 'field' }, el('label', {}, 'Catatan Revisi'), catatan),
     el('button', { class: 'btn btn-primary btn-block', onclick: async () => {
-      const metodeStr = metode.value === 'Tatap muka'
-        ? (tempat.value.trim() ? 'Tatap muka — ' + tempat.value.trim() : 'Tatap muka')
-        : 'Daring — ' + aplikasi.value;
-      const payload = { tanggal: tgl.value, topik: [...topikSelected].join(', '), metode: metodeStr, catatan: catatan.value.trim(), mahasiswaId: partnerSelect.value, status: 'revisi' };
+      const sync = metode.value === 'Synchronous';
+      const luring = tipe.value === 'Luring';
+      let metodeStr;
+      if (!sync) metodeStr = 'Asynchronous';
+      else if (luring) metodeStr = 'Synchronous · Luring' + (tempat.value.trim() ? ' — ' + tempat.value.trim() : '');
+      else metodeStr = 'Synchronous · Daring' + (link.value.trim() ? ' — ' + link.value.trim() : '');
+      const payload = { tanggal: sync ? tgl.value : '', topik: [...topikSelected].join(', '), metode: metodeStr, catatan: catatan.value.trim(), mahasiswaId: partnerSelect.value, status: 'revisi' };
       if (!topikSelected.size) return toast('Pilih atau ketik minimal 1 topik/materi', 'err');
       if (!payload.catatan) return toast('Catatan revisi wajib diisi', 'err');
       if (!payload.mahasiswaId) return toast('Pilih mahasiswa', 'err');
-      if (metode.value === 'Tatap muka' && !tempat.value.trim()) return toast('Tempat wajib diisi', 'err');
+      if (sync && !tgl.value) return toast('Tanggal wajib diisi untuk metode Synchronous', 'err');
+      if (sync && luring && !tempat.value.trim()) return toast('Tempat/ruangan wajib diisi (Luring)', 'err');
+      if (sync && !luring && !link.value.trim()) return toast('Link virtual meeting wajib diisi (Daring)', 'err');
       try { await api('/bimbingan', { method: 'POST', body: payload });
         toast('Revisi dikirim ke mahasiswa', 'ok'); closeModal();
         if (onDone) onDone(); else if (fixedMahasiswaId) openSkripsiDetail(fixedMahasiswaId); else navigate('bimbingan'); }
@@ -1642,7 +1812,7 @@ async function bimbinganForm(existing, fixedMahasiswaId, onDone, judulForm) {
 
 // Mahasiswa mengajukan bimbingan PERTAMA kali (sekali saja)
 async function ajukanBimbinganForm(onDone, fixedDosenId, fase) {
-  fase = ['Proposal', 'Hasil', 'Tutup', 'Promosi'].includes(fase) ? fase : 'Proposal';
+  fase = ['Proposal', 'Instrumen', 'Hasil', 'Tutup', 'Promosi'].includes(fase) ? fase : 'Proposal';
   const isLanjut = fase !== 'Proposal';
   const { skripsi } = await api('/skripsi/' + ME.id);
   const pembimbing = [skripsi.pembimbing1, skripsi.pembimbing2].filter(Boolean);
@@ -1959,7 +2129,7 @@ VIEWS.users = async (c) => {
           catch (ex) { toast(ex.message, 'err'); }
         } }, '🧹 Bersihkan Berkas Yatim') : null)));
   } catch (e) { /* abaikan bila gagal */ }
-  const roles = ['mahasiswa', 'dosen', 'kaprodi', 'admin'];
+  const roles = ['mahasiswa', 'dosen', 'validator', 'kaprodi', 'admin'];
   roles.forEach(role => {
     const group = users.filter(u => u.role === role);
     if (!group.length) return;
@@ -2010,7 +2180,7 @@ function downloadUserTemplate() {
     ['judul', 'Judul disertasi — khusus mahasiswa (opsional)'],
     ['promotor', 'NUPTK atau nama dosen promotor — khusus mahasiswa (opsional)'],
     ['copromotor', 'NUPTK atau nama dosen co-promotor — khusus mahasiswa (opsional)'],
-    ['fase_terakhir', 'MAHASISWA LAMA: fase terakhir yang SUDAH lulus ujian — Proposal / Hasil / Tutup / Promosi (opsional)'],
+    ['fase_terakhir', 'MAHASISWA LAMA: fase terakhir yang sudah selesai — Proposal / Instrumen / Hasil / Tutup / Promosi (opsional)'],
     ['tgl_ujian_proposal', 'Tanggal ujian proposal (YYYY-MM-DD) bila sudah lulus (opsional)'],
     ['tgl_ujian_hasil', 'Tanggal ujian hasil (YYYY-MM-DD) bila sudah lulus (opsional)'],
     ['tgl_ujian_tutup', 'Tanggal ujian tutup (YYYY-MM-DD) bila sudah lulus (opsional)'],
@@ -2087,7 +2257,7 @@ function userForm(existing) {
   const isEdit = !!existing;
   const nama = el('input', { type: 'text', value: existing?.nama || '' });
   const username = el('input', { type: 'text', value: existing?.username || '', ...(isEdit ? { disabled: 'disabled' } : {}) });
-  const role = el('select', {}, ...['mahasiswa', 'dosen', 'kaprodi', 'admin'].map(r =>
+  const role = el('select', {}, ...['mahasiswa', 'dosen', 'validator', 'kaprodi', 'admin'].map(r =>
     el('option', { value: r, ...(existing?.role === r ? { selected: 'selected' } : {}) }, roleLabel(r))));
   const prodiOptions = [el('option', { value: '' }, '— Pilih Program Studi —')];
   PRODI_CACHE.forEach(p => prodiOptions.push(el('option', { value: p.nama, ...(existing?.prodi === p.nama ? { selected: 'selected' } : {}) }, p.kode + ' — ' + p.nama)));
@@ -2101,16 +2271,18 @@ function userForm(existing) {
   const dosenOpts = () => USERS_CACHE.filter(u => u.role === 'dosen');
   const p1 = el('select', {}, el('option', { value: '' }, '—'), ...dosenOpts().map(d => el('option', { value: d.id, ...(existing?.pembimbing1 === d.id ? { selected: 'selected' } : {}) }, d.nama)));
   const p2 = el('select', {}, el('option', { value: '' }, '—'), ...dosenOpts().map(d => el('option', { value: d.id, ...(existing?.pembimbing2 === d.id ? { selected: 'selected' } : {}) }, d.nama)));
+  const validator = el('select', {}, el('option', { value: '' }, '— Default —'), ...USERS_CACHE.filter(u => u.role === 'validator').map(d => el('option', { value: d.id }, d.nama)));
 
   const mhsExtra = el('div', {},
     el('div', { class: 'two-col' },
       el('div', { class: 'field' }, el('label', {}, 'Tahun Masuk'), tahunMasuk),
       el('div', { class: 'field' }, el('label', {}, 'Promotor'), p1)),
-    el('div', { class: 'field' }, el('label', {}, 'Co-Promotor'), p2));
+    el('div', { class: 'field' }, el('label', {}, 'Co-Promotor'), p2),
+    el('div', { class: 'field' }, el('label', {}, 'Validator Instrumen'), validator));
   mhsExtra.append(el('div', { class: 'field' }, el('label', {}, 'Judul Disertasi'), judul));
-  // Prefill judul dari data skripsi saat mengedit mahasiswa
+  // Prefill judul & validator dari data skripsi saat mengedit mahasiswa
   if (isEdit && existing?.role === 'mahasiswa') {
-    api('/skripsi/' + existing.id).then(r => { if (r && r.skripsi) judul.value = r.skripsi.judul || ''; }).catch(() => {});
+    api('/skripsi/' + existing.id).then(r => { if (r && r.skripsi) { judul.value = r.skripsi.judul || ''; validator.value = r.skripsi.validatorId || ''; } }).catch(() => {});
   }
 
   const userLabel = el('label', {}, 'Username / NIM / NIP');
@@ -2132,7 +2304,7 @@ function userForm(existing) {
     isEdit ? null : el('div', { class: 'field' }, el('label', {}, 'Kata Sandi Awal'), pass),
     el('button', { class: 'btn btn-primary btn-block', onclick: async () => {
       const payload = { nama: nama.value.trim(), role: role.value, prodi: prodi.value.trim(), wa: wa.value.trim(),
-        tahunMasuk: tahunMasuk.value.trim(), pembimbing1: p1.value, pembimbing2: p2.value };
+        tahunMasuk: tahunMasuk.value.trim(), pembimbing1: p1.value, pembimbing2: p2.value, validatorId: validator.value };
       try {
         if (isEdit) { payload.judul = judul.value.trim(); await api('/users/' + existing.id, { method: 'PUT', body: payload }); }
         else {

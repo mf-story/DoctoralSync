@@ -195,6 +195,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 .badge.dosen { background: #e6f5ee; color: #157a55; }
 .badge.admin { background: #fbe9ea; color: #b83d47; }
 .badge.kaprodi { background: #fbf1dc; color: var(--gold-deep); }
+.badge.validator { background: #efe9fb; color: #6a3db8; }
 #menuToggle { display: none; }
 
 /* ---------- Layout ---------- */

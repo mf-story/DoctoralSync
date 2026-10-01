@@ -102,7 +102,7 @@ function faseAccReady(mid, fase) {
 // Onboarding mahasiswa lama: tandai fase-fase yang SUDAH dilewati (bimbingan berjalan
 // manual sebelum aplikasi). Membuat entri bimbingan sintetis (ditandai sistem:true)
 // agar ACC tiap fase terpenuhi + mengisi tanggal ujian tiap fase yang sudah lulus.
-const FASE_ORDER = ['Proposal', 'Hasil', 'Tutup', 'Promosi'];
+const FASE_ORDER = ['Proposal', 'Instrumen', 'Hasil', 'Tutup', 'Promosi'];
 const FASE_JENIS = { Proposal: 'proposal', Hasil: 'hasil', Tutup: 'tutup', Promosi: 'promosi' };
 function applyStartingStage(mid, lastFase, dates, sessions, doneFases, pengajuan) {
   const s = DB.skripsi.find(x => x.mahasiswaId === mid);
@@ -160,7 +160,13 @@ function applyStartingStage(mid, lastFase, dates, sessions, doneFases, pengajuan
       }
     });
     const jns = FASE_JENIS[fase];
-    if (isDone) {
+    if (fase === 'Instrumen') {
+      if (isDone) {
+        s.instrumen = Object.assign({}, s.instrumen, { tanggal: examTgl, status: 'valid', catatan: (s.instrumen && s.instrumen.catatan) || '', validatorId: s.validatorId || (s.instrumen && s.instrumen.validatorId) || '', updatedAt: new Date().toISOString() });
+      } else if (s.instrumen && s.instrumen.status) {
+        s.instrumen = Object.assign({}, s.instrumen, { status: '', updatedAt: new Date().toISOString() });
+      }
+    } else if (isDone) {
       const prev = s.ujian[jns] || {};
       s.ujian[jns] = { tanggal: examTgl, penguji: prev.penguji || [], metode: prev.metode || 'luring', link: prev.link || '', tempat: prev.tempat || '' };
     } else if (s.ujian[jns]) {
@@ -274,6 +280,8 @@ async function loadDB() {
   // migrasi ringan
   if (!DB.meta.tahapanTemplate) DB.meta.tahapanTemplate = DEFAULT_TAHAPAN;
   if (!DB.prodi) DB.prodi = [];
+  if (DB.meta.defaultValidator === undefined) DB.meta.defaultValidator = '';
+  (DB.skripsi || []).forEach(s => { if (s.validatorId === undefined) s.validatorId = DB.meta.defaultValidator || ''; });
   // Pindahkan foto profil base64 lama menjadi file agar db.json tetap ringan
   let avatarMigrated = false;
   (DB.users || []).forEach(u => {
@@ -366,7 +374,7 @@ function publicUser(u) {
 }
 // Sandi default: dosen = NUPTK, mahasiswa = NIM (keduanya = username); lainnya 'disertasi123'.
 function defaultPassword(role, username) {
-  return (role === 'dosen' || role === 'mahasiswa') ? String(username || '') : 'disertasi123';
+  return (role === 'dosen' || role === 'mahasiswa' || role === 'validator') ? String(username || '') : 'disertasi123';
 }
 
 // ------------------------------------------------------------------
@@ -522,7 +530,7 @@ async function handleApi(req, res, url, ip) {
       if (me.role !== 'admin') return sendJSON(res, 403, { error: 'Hanya admin' });
       const body = await readBody(req);
       const rows = Array.isArray(body.rows) ? body.rows : [];
-      const roles = ['mahasiswa', 'dosen', 'admin', 'kaprodi'];
+      const roles = ['mahasiswa', 'dosen', 'admin', 'kaprodi', 'validator'];
       const findDosen = v => {
         v = String(v || '').trim().toLowerCase();
         if (!v) return '';
@@ -558,6 +566,7 @@ async function handleApi(req, res, url, ip) {
           DB.skripsi.push({
             mahasiswaId: user.id, judul: String(r.judul || '').trim(),
             pembimbing1: p1, pembimbing2: p2,
+            validatorId: DB.meta.defaultValidator || '',
             tahapan: DB.meta.tahapanTemplate.map(n => ({ nama: n, selesai: false, tanggal: '' })),
             updatedAt: new Date().toISOString()
           });
@@ -570,7 +579,7 @@ async function handleApi(req, res, url, ip) {
               Hasil: r.tglHasil || r['tgl_ujian_hasil'] || '',
               Tutup: r.tglTutup || r['tgl_ujian_tutup'] || '',
               Promosi: r.tglPromosi || r['tgl_ujian_promosi'] || ''
-            });
+            }, {}, FASE_ORDER, {});
           }
         }
         created++;
@@ -586,7 +595,7 @@ async function handleApi(req, res, url, ip) {
       if (DB.users.some(u => u.username.toLowerCase() === username)) {
         return sendJSON(res, 400, { error: 'Username sudah dipakai' });
       }
-      const role = ['mahasiswa', 'dosen', 'admin', 'kaprodi'].includes(body.role) ? body.role : 'mahasiswa';
+      const role = ['mahasiswa', 'dosen', 'admin', 'kaprodi', 'validator'].includes(body.role) ? body.role : 'mahasiswa';
       const user = {
         id: uid('usr'),
         username,
@@ -607,6 +616,7 @@ async function handleApi(req, res, url, ip) {
           judul: String(body.judul || '').trim(),
           pembimbing1: user.pembimbing1,
           pembimbing2: user.pembimbing2,
+          validatorId: body.validatorId || DB.meta.defaultValidator || '',
           tahapan: DB.meta.tahapanTemplate.map(n => ({ nama: n, selesai: false, tanggal: '' })),
           updatedAt: new Date().toISOString()
         });
@@ -623,13 +633,14 @@ async function handleApi(req, res, url, ip) {
       ['nama', 'prodi', 'wa', 'tahunMasuk', 'pembimbing1', 'pembimbing2'].forEach(k => {
         if (body[k] !== undefined) u[k] = body[k];
       });
-      if (body.role && ['mahasiswa', 'dosen', 'admin', 'kaprodi'].includes(body.role)) u.role = body.role;
+      if (body.role && ['mahasiswa', 'dosen', 'admin', 'kaprodi', 'validator'].includes(body.role)) u.role = body.role;
       // sinkron pembimbing ke skripsi
       const sk = DB.skripsi.find(s => s.mahasiswaId === u.id);
       if (sk) {
         if (body.pembimbing1 !== undefined) sk.pembimbing1 = body.pembimbing1;
         if (body.pembimbing2 !== undefined) sk.pembimbing2 = body.pembimbing2;
         if (body.judul !== undefined) sk.judul = String(body.judul);
+        if (body.validatorId !== undefined) sk.validatorId = body.validatorId;
       }
       saveDBDebounced();
       return sendJSON(res, 200, { user: publicUser(u) });
@@ -711,6 +722,7 @@ async function handleApi(req, res, url, ip) {
       let list = DB.skripsi;
       if (me.role === 'mahasiswa') list = list.filter(s => s.mahasiswaId === me.id);
       else if (me.role === 'dosen') list = list.filter(s => s.pembimbing1 === me.id || s.pembimbing2 === me.id);
+      else if (me.role === 'validator') list = list.filter(s => !s.validatorId || s.validatorId === me.id);
       // admin & kaprodi: semua
       const enriched = list.map(s => ({ ...s, mahasiswa: publicUser(DB.users.find(u => u.id === s.mahasiswaId)) }));
       return sendJSON(res, 200, { skripsi: enriched });
@@ -739,7 +751,8 @@ async function handleApi(req, res, url, ip) {
       // mahasiswa boleh ubah judul sendiri; dosen/admin boleh ubah tahapan & pembimbing
       const isOwner = me.role === 'mahasiswa' && me.id === mid;
       const isSupervisor = me.role === 'dosen' && (s.pembimbing1 === me.id || s.pembimbing2 === me.id);
-      if (!isOwner && !isSupervisor && me.role !== 'admin') {
+      const isValidator = me.role === 'validator' && (!s.validatorId || s.validatorId === me.id);
+      if (!isOwner && !isSupervisor && !isValidator && me.role !== 'admin') {
         return sendJSON(res, 403, { error: 'Akses ditolak' });
       }
       if (body.judul !== undefined) {
@@ -787,6 +800,27 @@ async function handleApi(req, res, url, ip) {
         const lokasiTxt = metode === 'daring' ? (link ? `\nDaring: ${link}` : '\nDaring') : (tempat ? `\nLuring: ${tempat}` : '\nLuring');
         const isi = `*${namaUser(mid)}* mengisi *jadwal ${JENIS[jns].label}*: *${body.ujianTanggal}*.${pengujiTxt}${lokasiTxt}`;
         waNotify(s.pembimbing1, isi); waNotify(s.pembimbing2, isi);
+      }
+      // Admin boleh menghapus jadwal ujian suatu fase
+      if (me.role === 'admin' && body.ujianHapus && body.ujianJenis) {
+        if (s.ujian && s.ujian[body.ujianJenis]) delete s.ujian[body.ujianJenis];
+      }
+      // Admin menetapkan/mengubah validator instrumen
+      if (me.role === 'admin' && body.validatorId !== undefined) s.validatorId = body.validatorId;
+      // Validasi instrumen oleh validator (atau admin)
+      if (body.instrumen && (isValidator || me.role === 'admin')) {
+        if (!faseAccReady(mid, 'Instrumen') && me.role !== 'admin') return sendJSON(res, 403, { error: 'Instrumen baru dapat divalidasi setelah bimbingan instrumen di-ACC kedua pembimbing.' });
+        s.instrumen = s.instrumen || {};
+        const inb = body.instrumen;
+        if (inb.tanggal !== undefined) s.instrumen.tanggal = String(inb.tanggal);
+        if (inb.status !== undefined) s.instrumen.status = ['valid', 'perbaikan'].includes(inb.status) ? inb.status : '';
+        if (inb.catatan !== undefined) s.instrumen.catatan = String(inb.catatan);
+        s.instrumen.validatorId = s.validatorId || me.id;
+        s.instrumen.updatedAt = new Date().toISOString();
+        const stLabel = s.instrumen.status === 'valid' ? 'dinyatakan *VALID*' : (s.instrumen.status === 'perbaikan' ? 'perlu *PERBAIKAN*' : 'diperbarui');
+        waNotify(mid, `Instrumen penelitian Anda telah divalidasi: ${stLabel} oleh *${namaUser(s.validatorId || me.id)}*.`, { catatan: s.instrumen.catatan });
+        if (s.pembimbing1) waNotify(s.pembimbing1, `Instrumen *${namaUser(mid)}* ${stLabel}.`);
+        if (s.pembimbing2) waNotify(s.pembimbing2, `Instrumen *${namaUser(mid)}* ${stLabel}.`);
       }
       if (Array.isArray(body.tahapan) && (isSupervisor || me.role === 'admin')) {
         s.tahapan = body.tahapan.map(t => ({
@@ -852,7 +886,11 @@ async function handleApi(req, res, url, ip) {
         if (!sk || (dosenId !== sk.pembimbing1 && dosenId !== sk.pembimbing2)) {
           return sendJSON(res, 403, { error: 'Dosen tujuan bukan promotor/co-promotor Anda.' });
         }
-        faseBaru = ['Proposal', 'Hasil', 'Tutup', 'Promosi'].includes(body.fase) ? body.fase : 'Proposal';
+        faseBaru = ['Proposal', 'Instrumen', 'Hasil', 'Tutup', 'Promosi'].includes(body.fase) ? body.fase : 'Proposal';
+        // Tahap Hasil hanya boleh setelah instrumen DIVALIDASI (valid)
+        if (faseBaru === 'Hasil' && !(sk.instrumen && sk.instrumen.status === 'valid')) {
+          return sendJSON(res, 403, { error: 'Bimbingan Hasil dapat diajukan setelah instrumen penelitian divalidasi (valid).' });
+        }
         // Mahasiswa hanya boleh satu kali mengajukan ke tiap pembimbing PER FASE (Proposal / Disertasi)
         const existing = DB.bimbingan.filter(b => b.mahasiswaId === me.id && b.dosenId === dosenId && b.dibuatOleh === 'mahasiswa' && (b.fase || 'Proposal') === faseBaru);
         if (existing.length > 0) {
@@ -1149,6 +1187,44 @@ async function handleApi(req, res, url, ip) {
     return sendJSON(res, 200, { ujian: out });
   }
 
+  // ================= VALIDASI INSTRUMEN (validator) =================
+  if (seg[0] === 'validasi' && method === 'GET') {
+    if (me.role !== 'validator' && me.role !== 'admin' && me.role !== 'kaprodi') return sendJSON(res, 403, { error: 'Akses ditolak' });
+    const out = [];
+    DB.skripsi.forEach(s => {
+      if (s.lulus) return;
+      if (me.role === 'validator' && s.validatorId && s.validatorId !== me.id) return;
+      const ready = faseAccReady(s.mahasiswaId, 'Instrumen');
+      if (!ready && !(s.instrumen && s.instrumen.status)) return; // tampilkan bila siap divalidasi atau sudah ada hasil
+      const mhs = DB.users.find(u => u.id === s.mahasiswaId);
+      out.push({
+        mahasiswaId: s.mahasiswaId,
+        mahasiswaNama: mhs ? mhs.nama : '-',
+        mahasiswaNim: mhs ? mhs.username : '-',
+        prodi: mhs ? mhs.prodi : '',
+        judul: s.judul || '',
+        promotor: namaUser(s.pembimbing1), copromotor: namaUser(s.pembimbing2),
+        ready, instrumen: s.instrumen || null, validatorId: s.validatorId || ''
+      });
+    });
+    out.sort((a, b) => Number(!!(b.instrumen && b.instrumen.status === 'valid')) - Number(!!(a.instrumen && a.instrumen.status === 'valid')));
+    return sendJSON(res, 200, { validasi: out });
+  }
+
+  // ================= PENGATURAN (admin) =================
+  if (seg[0] === 'settings') {
+    if (seg[1] === 'validator') {
+      if (method === 'GET') return sendJSON(res, 200, { defaultValidator: DB.meta.defaultValidator || '' });
+      if (method === 'POST') {
+        if (me.role !== 'admin') return sendJSON(res, 403, { error: 'Hanya admin' });
+        const body = await readBody(req);
+        DB.meta.defaultValidator = String(body.validatorId || '');
+        saveDBDebounced();
+        return sendJSON(res, 200, { defaultValidator: DB.meta.defaultValidator });
+      }
+    }
+  }
+
   // ================= PEMELIHARAAN PENYIMPANAN (admin) =================
   if (seg[0] === 'maintenance') {
     if (me.role !== 'admin') return sendJSON(res, 403, { error: 'Hanya admin' });
@@ -1237,6 +1313,10 @@ function canAccessMahasiswa(me, mahasiswaId) {
   if (me.role === 'dosen') {
     const s = DB.skripsi.find(x => x.mahasiswaId === mahasiswaId);
     return s && (s.pembimbing1 === me.id || s.pembimbing2 === me.id);
+  }
+  if (me.role === 'validator') {
+    const s = DB.skripsi.find(x => x.mahasiswaId === mahasiswaId);
+    return s && (!s.validatorId || s.validatorId === me.id);
   }
   return false;
 }
