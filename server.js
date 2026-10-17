@@ -62,8 +62,8 @@ function waFormat(namaPenerima, isi, opts) {
   opts = opts || {};
   const garis = '━━━━━━━━━━━━━━━';
   let msg = 'Assalamualaikum Wr. Wb.\n\n';
-  msg += '*🎓 DOCTORALSYNC*\n';
-  msg += '_Sistem Bimbingan Disertasi_\n';
+  msg += '*🎓 S-3 PENDIDIKAN*\n';
+  msg += '_Universitas Muhammadiyah Makassar_\n';
   msg += garis + '\n';
   if (namaPenerima) msg += `Yth. *${namaPenerima}*,\n\n`;
   msg += isi;
@@ -1472,7 +1472,7 @@ if (tlsOptions) {
   }
   httpServer.listen(PORT, HOST, () => {
     console.log('===================================================');
-    console.log('  DoctoralSync — Sistem Bimbingan Disertasi berjalan');
+    console.log('  S-3 Pendidikan — Universitas Muhammadiyah Makassar berjalan');
     console.log('  HTTP    : http://localhost:' + PORT);
     if (httpsServer) console.log('  HTTPS   : https://localhost:' + HTTPS_PORT + '  (disarankan, anti-MitM)');
     else console.log('  HTTPS   : nonaktif — jalankan "buat-sertifikat.cmd" lalu restart untuk mengaktifkan');

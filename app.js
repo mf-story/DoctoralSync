@@ -2167,7 +2167,7 @@ function downloadUserTemplate() {
   const ws = XLSX.utils.aoa_to_sheet([header, ...contoh]);
   ws['!cols'] = [22, 20, 12, 18, 12, 15, 14, 40, 22, 22, 14, 16, 16, 16, 16].map(w => ({ wch: w }));
   const petunjuk = XLSX.utils.aoa_to_sheet([
-    ['PETUNJUK PENGISIAN TEMPLATE PENGGUNA DOCTORALSYNC'],
+    ['PETUNJUK PENGISIAN TEMPLATE PENGGUNA — S-3 PENDIDIKAN'],
     [''],
     ['Kolom', 'Keterangan'],
     ['nama', 'Nama lengkap (wajib)'],
@@ -2193,7 +2193,7 @@ function downloadUserTemplate() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Data');
   XLSX.utils.book_append_sheet(wb, petunjuk, 'Petunjuk');
-  XLSX.writeFile(wb, 'template-pengguna-doctoralsync.xlsx');
+  XLSX.writeFile(wb, 'template-pengguna-s3-pendidikan.xlsx');
 }
 
 function importUsersExcel() {

@@ -113,15 +113,15 @@ a { color: var(--navy-3); text-decoration: none; }
 .login-left form { width: 100%; display: flex; flex-direction: column; gap: 14px; }
 .login-welcome { text-align: center; margin: 0; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; }
 .login-logo {
-  display: flex; align-items: center; justify-content: center; gap: 12px;
-  font-family: var(--font-brand); font-size: 30px; font-weight: 800; letter-spacing: 1.5px; color: #0045a6;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; line-height: 1.05;
+  font-family: var(--font-brand); font-size: 25px; font-weight: 800; letter-spacing: 1px; color: #0045a6;
 }
 .login-badge {
   width: 42px; height: 42px; display: grid; place-items: center; font-size: 22px; color: #fff;
   border-radius: 12px; background: linear-gradient(150deg, #0045a6, #1560c4);
   box-shadow: 0 10px 22px -8px rgba(0, 69, 166, .7);
 }
-.login-sub { text-align: center; color: var(--muted); font-size: 13px; margin: 0 6px 8px; line-height: 1.5; }
+.login-sub { text-align: center; color: var(--muted); font-size: 13px; margin: 2px 6px 10px; line-height: 1.5; }
 .login-field {
   display: flex; align-items: center; gap: 10px; padding: 3px 16px;
   border: 1px solid var(--line); border-radius: 30px; background: #fbfcfe; transition: border-color .2s, box-shadow .2s;
@@ -160,7 +160,7 @@ a { color: var(--navy-3); text-decoration: none; }
   display: inline-grid; place-items: center; width: 66px; height: 66px; font-size: 34px; margin-bottom: 10px;
   border-radius: 18px; background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .28); backdrop-filter: blur(4px);
 }
-.login-brand2 { font-family: var(--font-brand); font-size: 38px; font-weight: 800; letter-spacing: 3px; }
+.login-brand2 { font-family: var(--font-brand); font-size: 30px; font-weight: 800; letter-spacing: 1.5px; white-space: nowrap; }
 .login-right-inner p { color: rgba(233, 240, 255, .9); font-size: 13.5px; line-height: 1.7; margin: 12px 0 0; }
 @media (max-width: 760px) {
   .login-card2 { grid-template-columns: 1fr; max-width: 420px; }
@@ -427,7 +427,7 @@ tr.rowlink:hover td { background: var(--primary-l); }
   /* Login: kecilkan brand agar tak terpotong */
   .login-card2 { border-radius: 16px; }
   .login-left { padding: 28px 20px; }
-  .login-logo { font-size: 21px; letter-spacing: .5px; gap: 9px; }
+  .login-logo { font-size: 19px; letter-spacing: .5px; gap: 9px; }
   .login-badge { width: 36px; height: 36px; font-size: 19px; }
   .login-welcome { font-size: 11px; letter-spacing: 2px; }
   .login-sub { font-size: 12.5px; }
