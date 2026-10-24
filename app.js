@@ -664,12 +664,14 @@ async function renderKartuBimbingan(c, mahasiswaId, skripsi) {
     (isMhsOwn && ordered.length === 0) ? el('button', { class: 'btn btn-primary btn-sm', onclick: () => ajukanBimbinganForm(reload) }, '+ Ajukan Bimbingan Pertama') : null));
   // Dua kolom terpisah per pembimbing (seperti tampilan mahasiswa & arsip)
   if (pembs.length && ordered.length) {
-    const cols = el('div', { class: 'two-col', style: 'align-items:start' });
     const accSets = {};
     pembs.forEach(p => { accSets[p.id] = trackAccFases(ordered.filter(b => b.dosenId === p.id)); });
     const accReady = fase => pembs.every(p => accSets[p.id].has(fase));
     const pendingAcc = fase => pembs.filter(p => !accSets[p.id].has(fase)).map(p => p.label);
-    pembs.forEach(p => {
+    // Dosen hanya melihat jalur bimbingannya sendiri; admin/kaprodi lihat keduanya
+    const renderPembs = (ME.role === 'dosen' && pembs.some(p => p.id === ME.id)) ? pembs.filter(p => p.id === ME.id) : pembs;
+    const cols = el('div', { class: renderPembs.length > 1 ? 'two-col' : '', style: 'align-items:start' });
+    renderPembs.forEach(p => {
       const list = ordered.filter(b => b.dosenId === p.id);
       const card = el('div', { class: 'card' });
       card.append(el('div', { class: 'row-between', style: 'margin-bottom:6px;gap:8px;align-items:flex-start' },
@@ -806,12 +808,14 @@ VIEWS.bimbingan = async (c) => {
     ].filter(p => p.id) : [];
     let groupEl;
     if (pembs2.length) {
-      groupEl = el('div', { class: 'two-col', style: 'align-items:start' });
       const accSets2 = {};
       pembs2.forEach(p => { accSets2[p.id] = trackAccFases(list.filter(b => b.dosenId === p.id)); });
       const accReady2 = fase => pembs2.every(p => accSets2[p.id].has(fase));
       const pendingAcc2 = fase => pembs2.filter(p => !accSets2[p.id].has(fase)).map(p => p.label);
-      pembs2.forEach(p => {
+      // Dosen hanya melihat jalurnya sendiri; admin/kaprodi lihat keduanya
+      const renderPembs2 = (ME.role === 'dosen' && pembs2.some(p => p.id === ME.id)) ? pembs2.filter(p => p.id === ME.id) : pembs2;
+      groupEl = el('div', { class: renderPembs2.length > 1 ? 'two-col' : '', style: 'align-items:start' });
+      renderPembs2.forEach(p => {
         const plist = list.filter(b => b.dosenId === p.id);
         const pcard = el('div', { class: 'card', style: 'box-shadow:none;border:1px solid var(--line)' });
         pcard.append(el('div', { class: 'row-between', style: 'margin-bottom:6px;gap:8px;align-items:center' },
