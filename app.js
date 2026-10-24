@@ -1072,7 +1072,8 @@ function bimbinganItem(b, label, opts, isPengajuan, extraDocs) {
   const carried = (extraDocs || []).filter(d => !docs.some(x => x.id === d.id));
 
   // Setiap langkah bimbingan = kartu ringkas yang bisa diklik untuk membuka popup detail
-  const item = el('div', { class: 'list-item bimb-item' + (isPengajuan ? ' pengajuan' : ''), style: 'cursor:pointer', onclick: () => openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs) });
+  const isInstrumen = /\bInstrumen\b/i.test(label || '');
+  const item = el('div', { class: 'list-item bimb-item' + (isPengajuan ? ' pengajuan' : ''), style: 'cursor:pointer', onclick: () => openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs, isInstrumen) });
   const head = el('div', { class: 'li-head' });
   head.append(el('span', { class: 'bimb-no' + (isPengajuan ? ' pengajuan' : '') }, label || (isPengajuan ? 'Pengajuan Bimbingan' : 'Bimbingan')));
   if (!isPengajuan && b.topik) head.append(el('b', {}, esc(b.topik)));
@@ -1094,7 +1095,7 @@ function bimbinganItem(b, label, opts, isPengajuan, extraDocs) {
 }
 
 // Popup detail 1 langkah bimbingan — dosen bisa revisi, mahasiswa bisa menanggapi/upload
-function openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs) {
+function openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs, isInstrumen) {
   const docs = (allDocs || []).filter(d => d.bimbinganId === b.id);
   const carried = (extraDocs || []).filter(d => !docs.some(x => x.id === d.id));
   const body = el('div', {});
@@ -1107,7 +1108,7 @@ function openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs) {
   if (b.metode) body.append(el('div', { class: 'field' }, el('label', {}, 'Metode'), el('div', {}, esc(b.metode))));
   if (b.catatanMhs) body.append(el('div', { class: 'field' }, el('label', {}, 'Catatan Mahasiswa'), el('div', { style: 'white-space:pre-wrap' }, esc(b.catatanMhs))));
   if (b.catatanDosen) body.append(el('div', { class: 'field' }, el('label', {}, 'Catatan / Arahan Dosen'), el('div', { style: 'white-space:pre-wrap;color:var(--green)' }, esc(b.catatanDosen))));
-  const reopenSelf = () => openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs);
+  const reopenSelf = () => openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs, isInstrumen);
   if (docs.length) docs.forEach(d => body.append(docToggleBlock(d, reopenSelf)));
   if (carried.length) {
     body.append(el('div', { class: 'muted small', style: 'margin-top:6px' }, '📎 Dokumen dari pengajuan (dengan tanda/catatan dosen):'));
@@ -1126,14 +1127,14 @@ function openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs) {
             await api('/bimbingan/' + b.id, { method: 'PUT', body: { status: 'disetujui' } });
             b.status = 'disetujui';
             toast('Pengajuan disetujui', 'ok');
-            openBimbinganModal(b, allDocs, reload, isPengajuan); // re-render modal, TETAP terbuka
+            openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs, isInstrumen); // re-render modal, TETAP terbuka
             reload && reload();
           } catch (ex) { toast(ex.message, 'err'); }
         } }, '✅ Setujui Pengajuan'));
     } else if (b.status === 'acc') {
-      // Sudah ACC: jadwal ujian & file ada di baris "Jadwal Ujian"
+      // Sudah ACC: langkah berikutnya tergantung fase (validasi instrumen / jadwal ujian)
       body.append(hr(),
-        el('div', { class: 'note-acc' }, '✅ Sudah di-ACC. Jadwal ujian & file ada pada baris "Jadwal Ujian" di bawah.'),
+        el('div', { class: 'note-acc' }, isInstrumen ? '✅ Sudah di-ACC. Validasi instrumen ada pada baris "Validasi Instrumen" di bawah.' : '✅ Sudah di-ACC. Jadwal ujian & file ada pada baris "Jadwal Ujian" di bawah.'),
         el('button', { class: 'btn btn-warn btn-sm', onclick: () => { closeModal(); bimbinganForm(null, b.mahasiswaId, reload); } }, '✍️ Minta Revisi'));
     } else {
       // 2) Setelah disetujui / pada tiap langkah: Minta Revisi (buat bimbingan baru) atau ACC
@@ -1141,7 +1142,7 @@ function openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs) {
         el('div', { class: 'muted small', style: 'margin-bottom:8px' }, 'Periksa dokumen mahasiswa, lalu minta revisi (dihitung 1 bimbingan) atau ACC bila sudah benar.'),
         el('div', { class: 'row' },
           el('button', { class: 'btn btn-warn', onclick: () => { closeModal(); bimbinganForm(null, b.mahasiswaId, reload); } }, '✍️ Minta Revisi'),
-          el('button', { class: 'btn btn-success', onclick: () => { closeModal(); accForm(b, reload); } }, '✅ ACC – Siap Ujian')));
+          el('button', { class: 'btn btn-success', onclick: () => { closeModal(); accForm(b, reload, isInstrumen); } }, isInstrumen ? '✅ ACC – Siap Validasi' : '✅ ACC – Siap Ujian')));
     }
   }
 
@@ -1213,19 +1214,19 @@ function openBimbinganModal(b, allDocs, reload, isPengajuan, extraDocs) {
   openModal(judul, body, { wide: (docs.length + carried.length) > 0 });
 }
 
-// Form ACC — dosen menambahkan catatan sebelum menyatakan siap ujian (popup tidak langsung tertutup)
-function accForm(b, reload) {
+// Form ACC — dosen menambahkan catatan sebelum menyatakan siap ujian/validasi (popup tidak langsung tertutup)
+function accForm(b, reload, isInstrumen) {
   const cat = el('textarea', { rows: 4, placeholder: 'Catatan / keterangan untuk mahasiswa (opsional)…' }, b.catatanDosen || '');
   const body = el('div', {},
-    el('div', { class: 'note-acc' }, 'Disertasi akan di-ACC dan dinyatakan siap diujikan. Tambahkan catatan bila perlu, lalu simpan.'),
+    el('div', { class: 'note-acc' }, isInstrumen ? 'Bimbingan instrumen akan di-ACC dan diteruskan ke tahap validasi instrumen. Tambahkan catatan bila perlu, lalu simpan.' : 'Disertasi akan di-ACC dan dinyatakan siap diujikan. Tambahkan catatan bila perlu, lalu simpan.'),
     el('div', { class: 'field' }, el('label', {}, '✅ Catatan ACC'), cat),
     el('button', { class: 'btn btn-success btn-block', onclick: async () => {
       try {
         await api('/bimbingan/' + b.id, { method: 'PUT', body: { status: 'acc', catatanDosen: cat.value.trim() } });
-        toast('Disertasi di-ACC – siap diujikan', 'ok'); closeModal(); reload && reload();
+        toast(isInstrumen ? 'Di-ACC – siap divalidasi' : 'Disertasi di-ACC – siap diujikan', 'ok'); closeModal(); reload && reload();
       } catch (ex) { toast(ex.message, 'err'); }
     } }, '✅ Simpan ACC'));
-  openModal('ACC – Siap Ujian', body);
+  openModal(isInstrumen ? 'ACC – Siap Validasi' : 'ACC – Siap Ujian', body);
 }
 
 // Setujui pengajuan lalu langsung buka form tahapan (berisi catatan/perbaikan)
