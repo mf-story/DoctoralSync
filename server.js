@@ -24,7 +24,7 @@ const MAX_BODY = 20 * 1024 * 1024; // 20 MB (body JSON, base64 ~1.37x lebih besa
 // --- Notifikasi WhatsApp (opsional; lewat WA gateway di wa-server/) ---
 const WA_API_URL = process.env.WA_API_URL || '';   // mis. http://127.0.0.1:3011/send
 const WA_API_KEY = process.env.WA_API_KEY || '';
-const APP_URL = process.env.APP_URL || ('http://localhost:' + PORT);
+const APP_URL = process.env.APP_URL || 'https://s3pendidikan.unismuh.online';
 // Banner gambar untuk notifikasi WA. Default: teks saja (seperti LeaDi-PDS).
 // Isi env WA_BANNER dengan URL gambar HANYA bila ingin memakai kartu gambar.
 const WA_BANNER = process.env.WA_BANNER || '';
@@ -97,6 +97,18 @@ function faseAccReady(mid, fase) {
   const pembs = [s.pembimbing1, s.pembimbing2].filter(Boolean);
   if (!pembs.length) return false;
   return pembs.every(pid => trackAccFasesSrv(DB.bimbingan.filter(b => b.mahasiswaId === mid && b.dosenId === pid)).has(fase));
+}
+
+// Fase sebuah entri bimbingan (ditentukan oleh pengajuan mahasiswa terakhir pada jalur dosen tsb).
+function faseOfBimbingan(b) {
+  const entries = DB.bimbingan.filter(x => x.mahasiswaId === b.mahasiswaId && x.dosenId === b.dosenId)
+    .sort((a, c) => (a.createdAt || '').localeCompare(c.createdAt || ''));
+  let fase = 'Proposal';
+  for (const e of entries) {
+    if (e.dibuatOleh === 'mahasiswa') fase = e.fase || fase;
+    if (e.id === b.id) break;
+  }
+  return fase;
 }
 
 // Onboarding mahasiswa lama: tandai fase-fase yang SUDAH dilewati (bimbingan berjalan
@@ -958,7 +970,8 @@ async function handleApi(req, res, url, ip) {
         waNotify(b.mahasiswaId, `Alhamdulillah, pengajuan bimbingan Anda telah *DISETUJUI* oleh *${namaUser(b.dosenId)}*. \u2705\nSilakan lanjutkan proses bimbingan Anda.`, { catatan: note });
       } else if ((isDosen || me.role === 'admin') && body.status === 'acc') {
         const note = String(b.catatanDosen || '').trim();
-        waNotify(b.mahasiswaId, `Alhamdulillah, bimbingan Anda telah *di-ACC* oleh *${namaUser(b.dosenId)}* dan dinyatakan *siap diujikan*. 🎉`, { catatan: note });
+        const accInstrumen = faseOfBimbingan(b) === 'Instrumen';
+        waNotify(b.mahasiswaId, `Alhamdulillah, bimbingan Anda telah *di-ACC* oleh *${namaUser(b.dosenId)}*${accInstrumen ? ' dan diteruskan ke tahap *validasi instrumen*' : ' dan dinyatakan *siap diujikan*'}. 🎉`, { catatan: note });
       }
       if (isMhs && body.tanggalUjian) {
         waNotify(b.dosenId, `*${namaUser(b.mahasiswaId)}* telah mengisi *jadwal ujian*: *${b.tanggalUjian}*.`);
