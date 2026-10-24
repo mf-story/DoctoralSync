@@ -819,6 +819,15 @@ async function handleApi(req, res, url, ip) {
       }
       // Admin menetapkan/mengubah validator instrumen
       if (me.role === 'admin' && body.validatorId !== undefined) s.validatorId = body.validatorId;
+      // Mahasiswa mengajukan validasi instrumen ke validator (setelah ACC kedua pembimbing)
+      if (isOwner && body.instrumenAjukan) {
+        if (!faseAccReady(mid, 'Instrumen')) return sendJSON(res, 403, { error: 'Validasi instrumen dapat diajukan setelah bimbingan instrumen di-ACC kedua pembimbing.' });
+        s.instrumen = s.instrumen || {};
+        s.instrumen.diajukan = true;
+        s.instrumen.tanggalAjukan = new Date().toISOString();
+        if (s.instrumen.status === 'perbaikan') s.instrumen.status = ''; // ajukan ulang setelah perbaikan
+        if (s.validatorId) waNotify(s.validatorId, `*${namaUser(mid)}* mengajukan *validasi instrumen penelitian*. Mohon untuk ditinjau dan divalidasi.`);
+      }
       // Validasi instrumen oleh validator (atau admin)
       if (body.instrumen && (isValidator || me.role === 'admin')) {
         if (!faseAccReady(mid, 'Instrumen') && me.role !== 'admin') return sendJSON(res, 403, { error: 'Instrumen baru dapat divalidasi setelah bimbingan instrumen di-ACC kedua pembimbing.' });
@@ -1208,7 +1217,8 @@ async function handleApi(req, res, url, ip) {
       if (s.lulus) return;
       if (me.role === 'validator' && s.validatorId && s.validatorId !== me.id) return;
       const ready = faseAccReady(s.mahasiswaId, 'Instrumen');
-      if (!ready && !(s.instrumen && s.instrumen.status)) return; // tampilkan bila siap divalidasi atau sudah ada hasil
+      // Hanya tampilkan yang sudah DIAJUKAN mahasiswa atau sudah ada hasil validasi
+      if (!(s.instrumen && (s.instrumen.diajukan || s.instrumen.status))) return;
       const mhs = DB.users.find(u => u.id === s.mahasiswaId);
       out.push({
         mahasiswaId: s.mahasiswaId,

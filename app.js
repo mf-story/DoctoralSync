@@ -1379,21 +1379,24 @@ function validasiInstrumenRow(skripsi, allDocs, reload, ready, pending) {
   pending = pending || [];
   const mid = skripsi.mahasiswaId;
   const inst = skripsi.instrumen || {};
+  const isMhsOwn = ME.role === 'mahasiswa' && ME.id === mid;
   const docs = (allDocs || []).filter(d => d.bimbinganId === 'instrumen:' + mid);
   const row = el('div', { class: 'list-item bimb-item ujian', style: 'cursor:pointer', onclick: () => openValidasiInstrumenModal(skripsi, allDocs, reload, ready, pending) });
-  const tag = inst.status === 'valid' ? el('span', { class: 'tag selesai' }, 'tervalidasi')
-    : inst.status === 'perbaikan' ? el('span', { class: 'tag revisi' }, 'perlu perbaikan')
-      : el('span', { class: 'tag revisi' }, ready ? 'menunggu validasi' : 'terkunci');
+  const st = inst.status === 'valid' ? ['selesai', 'tervalidasi']
+    : inst.status === 'perbaikan' ? ['revisi', 'perlu perbaikan']
+      : inst.diajukan ? ['acc', 'menunggu validasi']
+        : ready ? ['revisi', 'belum diajukan'] : ['revisi', 'terkunci'];
   row.append(el('div', { class: 'li-head' },
     el('span', { class: 'bimb-no ujian' }, '🧪 Validasi Instrumen'),
-    tag,
+    el('span', { class: 'tag ' + st[0] }, st[1]),
     el('span', { class: 'spacer', style: 'flex:1' }),
     el('span', { class: 'muted small' }, inst.tanggal ? fmtDate(inst.tanggal) : '')));
   let desc;
   if (inst.status === 'valid') desc = '✅ Instrumen valid' + (inst.tanggal ? ' · ' + fmtDate(inst.tanggal) : '');
-  else if (inst.status === 'perbaikan') desc = '✏️ Perlu perbaikan instrumen';
+  else if (inst.status === 'perbaikan') desc = isMhsOwn ? '✏️ Perlu perbaikan — perbaiki lalu ajukan ulang validasi' : '✏️ Perlu perbaikan instrumen';
   else if (!ready) desc = '🔒 Menunggu ACC ' + (pending.length ? pending.join(' & ') : 'kedua pembimbing');
-  else desc = 'Validator: ' + (userName(skripsi.validatorId) || '(belum ditetapkan)') + ' — menunggu validasi';
+  else if (inst.diajukan) desc = '⏳ Menunggu validasi oleh validator';
+  else desc = isMhsOwn ? '📤 Klik untuk mengajukan validasi ke validator' : '🔓 Menunggu mahasiswa mengajukan validasi';
   row.append(el('div', { class: 'small', style: 'margin-top:4px;color:' + ((!ready && !inst.status) ? 'var(--red)' : 'var(--primary)') },
     desc + (docs.length ? ' · 📎 ' + docs.length + ' berkas' : '')));
   return row;
@@ -1412,18 +1415,51 @@ function validasiInstrumenCard(skripsi, allDocs, reload, ready, pending) {
   const isValidator = ME.role === 'validator' && (!skripsi.validatorId || ME.id === skripsi.validatorId);
   const canValidate = isValidator || ME.role === 'admin';
   const card = el('div', { class: 'card', style: 'margin-top:14px' });
+  const st = inst.status === 'valid' ? ['selesai', 'valid']
+    : inst.status === 'perbaikan' ? ['revisi', 'perlu perbaikan']
+      : inst.diajukan ? ['acc', 'menunggu validasi']
+        : ready ? ['revisi', 'belum diajukan'] : ['revisi', 'terkunci'];
   card.append(el('div', { class: 'li-head' },
     el('span', { class: 'bimb-no ujian' }, '🧪 Validasi Instrumen Penelitian'),
-    inst.status === 'valid' ? el('span', { class: 'tag selesai' }, 'valid')
-      : inst.status === 'perbaikan' ? el('span', { class: 'tag revisi' }, 'perlu perbaikan')
-        : el('span', { class: 'tag revisi' }, ready ? 'menunggu validasi' : 'terkunci')));
-  card.append(el('div', { class: 'muted small', style: 'margin-top:6px' }, 'Validator: ' + esc(userName(skripsi.validatorId) || '(belum ditetapkan)')));
+    el('span', { class: 'tag ' + st[0] }, st[1])));
+  card.append(el('div', { class: 'muted small', style: 'margin-top:6px' }, 'Validator: ' + esc(skripsi.validatorId ? userName(skripsi.validatorId) : '(ditangani validator yang tersedia)')));
   if (!ready && !inst.status) card.append(el('div', { class: 'small', style: 'margin-top:6px;color:var(--red)' }, '🔒 Validasi dibuka setelah bimbingan instrumen di-ACC kedua pembimbing' + (pending.length ? ' · menunggu: ' + pending.join(', ') : '')));
   if (inst.tanggal) card.append(el('div', { style: 'margin-top:6px' }, el('span', { class: 'muted small' }, 'Tanggal validasi: '), fmtDate(inst.tanggal)));
   if (inst.catatan) card.append(el('div', { class: 'note-revisi', style: 'margin-top:8px' }, '📝 ' + esc(inst.catatan)));
-  if (docs.length) { card.append(el('div', { class: 'muted small', style: 'margin:8px 0 4px' }, 'Lembar validasi:')); docs.forEach(d => card.append(docToggleBlock(d))); }
+  if (docs.length) { card.append(el('div', { class: 'muted small', style: 'margin:8px 0 4px' }, 'Berkas instrumen / lembar validasi:')); docs.forEach(d => card.append(docToggleBlock(d))); }
 
-  if (canValidate && ready) {
+  // MAHASISWA: unggah instrumen & ajukan validasi ke validator (setelah ACC kedua pembimbing)
+  const mhsBisaAjukan = isMhsOwn && ready && inst.status !== 'valid' && (!inst.diajukan || inst.status === 'perbaikan');
+  if (mhsBisaAjukan) {
+    const fileInput = el('input', { type: 'file', accept: '.pdf' });
+    const upBox = el('div', { style: 'margin-top:6px' });
+    const upBtn = el('button', { class: 'btn btn-ghost', onclick: async () => {
+      const f = fileInput.files[0];
+      if (!f) return toast('Pilih file PDF dulu', 'err');
+      if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) return toast('Hanya berkas PDF', 'err');
+      if (f.size > 12 * 1024 * 1024) return toast('Berkas melebihi 12MB', 'err');
+      try {
+        const dataUrl = await readFileDataUrl(f);
+        const res = await api('/documents', { method: 'POST', body: { nama: f.name, dataUrl, bimbinganId: key, mahasiswaId: mid } });
+        toast('Instrumen terunggah', 'ok'); fileInput.value = '';
+        upBox.append(el('div', { class: 'muted small' }, '📄 ' + esc(res.document.nama) + ' ✓'));
+      } catch (ex) { toast(ex.message, 'err'); }
+    } }, '⬆️ Unggah Instrumen (PDF)');
+    const ajukanBtn = el('button', { class: 'btn btn-primary btn-block mt', onclick: async () => {
+      try { await api('/skripsi/' + mid, { method: 'PUT', body: { instrumenAjukan: true } }); toast('Validasi instrumen diajukan ke validator', 'ok'); reload && reload(); }
+      catch (ex) { toast(ex.message, 'err'); }
+    } }, '📤 Ajukan Validasi ke Validator');
+    card.append(el('hr', { style: 'border:none;border-top:1px solid var(--line);margin:12px 0' }),
+      el('div', { class: inst.status === 'perbaikan' ? 'note-revisi' : 'note-acc' }, inst.status === 'perbaikan'
+        ? '✏️ Perbaiki instrumen sesuai catatan validator, unggah ulang, lalu ajukan validasi kembali.'
+        : 'Unggah instrumen penelitian Anda, lalu ajukan ke validator untuk divalidasi.'),
+      el('div', { class: 'field' }, el('label', {}, 'Instrumen (PDF)'), fileInput), upBtn, upBox, ajukanBtn);
+  } else if (isMhsOwn && inst.diajukan && !inst.status) {
+    card.append(el('div', { class: 'note-acc', style: 'margin-top:8px' }, '⏳ Validasi instrumen sudah diajukan. Menunggu validator memeriksa.'));
+  }
+
+  // VALIDATOR/ADMIN: form validasi (muncul setelah mahasiswa mengajukan)
+  if (canValidate && ready && (inst.diajukan || ME.role === 'admin')) {
     const tgl = el('input', { type: 'date', value: inst.tanggal || new Date().toISOString().slice(0, 10) });
     const status = el('select', {}, el('option', { value: 'valid' }, 'Valid'), el('option', { value: 'perbaikan' }, 'Perlu perbaikan'));
     status.value = inst.status || 'valid';
@@ -1457,13 +1493,10 @@ function validasiInstrumenCard(skripsi, allDocs, reload, ready, pending) {
   if (isMhsOwn && inst.status === 'valid') {
     const p1 = skripsi.pembimbing1, p2 = skripsi.pembimbing2;
     card.append(el('hr', { style: 'border:none;border-top:1px solid var(--line);margin:14px 0' }),
-      el('div', { class: 'note-acc' }, '✅ Instrumen valid. Ajukan bimbingan Hasil:'),
+      el('div', { class: 'note-acc' }, '✅ Instrumen valid. Silakan lakukan penelitian, lalu ajukan bimbingan Hasil:'),
       el('div', { class: 'row', style: 'gap:8px' },
         p1 ? el('button', { class: 'btn btn-primary btn-sm', onclick: () => ajukanBimbinganForm(reload, p1, 'Hasil') }, '➡️ ke Promotor') : null,
         p2 ? el('button', { class: 'btn btn-primary btn-sm', onclick: () => ajukanBimbinganForm(reload, p2, 'Hasil') }, '➡️ ke Co-Promotor') : null));
-  }
-  if (isMhsOwn && inst.status === 'perbaikan') {
-    card.append(el('div', { class: 'note-revisi', style: 'margin-top:8px' }, '✏️ Validator meminta perbaikan instrumen. Perbaiki lalu lanjutkan bimbingan instrumen dengan pembimbing sebelum divalidasi ulang.'));
   }
   return card;
 }
